@@ -48,12 +48,17 @@ PR #22836 的核心是为 llama.cpp / ggml 增加一种新量化格式：`STQ1_0
 - ARM 有专门优化 kernel
 - 因此手机和 Apple Silicon 是重点目标
 
+当前项目判断：
+- Windows / x86 的意义主要是兼容验证和最小加载验证
+- Apple Silicon / ARM 更接近这个 PR 的真实目标运行路径
+
 ## 本地验证
 
 ### 成功样本
 
 模型：
-- `/Users/fh/LLMs/AngelSlim/Hy-MT1___5-1___8B-1___25bit__GUFF/Hy-MT1.5-1.8B-STQ1_0.gguf`
+- 项目标准路径：`models/AngelSlim/Hy-MT1.5-1.8B-1.25bit-GGUF/Hy-MT1.5-1.8B-STQ1_0.gguf`
+- 作者本机历史路径：`/Users/fh/LLMs/AngelSlim/Hy-MT1___5-1___8B-1___25bit__GUFF/Hy-MT1.5-1.8B-STQ1_0.gguf`
 
 结果：
 - 已成功加载
@@ -70,7 +75,7 @@ PR #22836 的核心是为 llama.cpp / ggml 增加一种新量化格式：`STQ1_0
 ### 失败样本
 
 模型：
-- `/Users/fh/LLMs/AngelSlim/Hy-MT1___5-1___8B-2bit__GUFF/Hy-MT1.5-1.8B-2bit.gguf`
+- 作者本机历史路径：`/Users/fh/LLMs/AngelSlim/Hy-MT1___5-1___8B-2bit__GUFF/Hy-MT1.5-1.8B-2bit.gguf`
 
 结果：
 - 加载失败
@@ -81,3 +86,4 @@ PR #22836 的核心是为 llama.cpp / ggml 增加一种新量化格式：`STQ1_0
 
 结论：
 - 不能把这个 2bit GGUF 当成 STQ1_0 支持验证样本
+- 当前问题更像这份 GGUF 与当前 loader / writer 组合不兼容，不等于所有 2bit GGUF 都不兼容

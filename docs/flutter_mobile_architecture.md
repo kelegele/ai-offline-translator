@@ -8,6 +8,11 @@
 
 不要把高性能推理核心直接做进 Dart 层。
 
+平台目标说明：
+- 当前目标不是 Windows 本地高性能推理
+- Windows 仅作为开发、文档、目录规范和最小兼容验证环境
+- 真实运行路径优先面向 Apple Silicon / ARM 移动端
+
 ## 推荐架构
 
 - Flutter 层：
@@ -76,14 +81,34 @@ EventChannel：
 MVP 阶段只支持：
 - `Hy-MT1.5-1.8B-STQ1_0.gguf`
 
+开发阶段标准路径：
+- `models/AngelSlim/Hy-MT1.5-1.8B-1.25bit-GGUF/Hy-MT1.5-1.8B-STQ1_0.gguf`
+
+下载方式：
+- `modelscope download --model AngelSlim/Hy-MT1.5-1.8B-1.25bit-GGUF --local_dir models/AngelSlim/Hy-MT1.5-1.8B-1.25bit-GGUF`
+
 不建议首版同时支持多个模型格式。
+
+移动端交付策略待定。优先候选：
+- 开发期从 `models/` 手动选择模型文件
+- 发布期再决定是否随安装包分发、首启下载或由用户导入
 
 ## 版本要求
 
 移动端 App 内部集成的 llama.cpp 必须包含：
 - `PR #22836`
 
+开发阶段标准路径：
+- `third_party/llama.cpp/`
+
+初始化脚本会从 `https://github.com/ggml-org/llama.cpp.git` 拉取 `refs/pull/22836/head` 到本地 `pr-22836` 分支。
+
 否则 App 不会识别 `STQ1_0`。
+
+Windows 备注：
+- 当前 Windows 验证只证明 `STQ1_0` 模型可被 PR 分支加载并完成最小输出
+- 当前 Windows 构建未启用 GPU 后端，不作为性能参考
+- Windows 运行安全规则见 `llama_windows_safety.md`
 
 ## MVP 功能建议
 

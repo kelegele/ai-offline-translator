@@ -1,15 +1,98 @@
 # ai-offline-translator
 
-离线翻译 App 项目工作目录。
+离线翻译 App 项目工作目录。当前阶段以文档、模型验证和移动端架构准备为主。
 
-当前已确认：
+## 当前结论
+
 - `llama.cpp` 的 `PR #22836` 支持 `STQ1_0`
-- `Hy-MT1.5-1.8B-STQ1_0.gguf` 已在本机成功加载并完成翻译推理
-- `Hy-MT1.5-1.8B-2bit.gguf` 当前与本地 `pr-22836` loader 不兼容
+- `Hy-MT1.5-1.8B-STQ1_0.gguf` 已在作者本机成功加载并完成翻译推理
+- `Hy-MT1.5-1.8B-2bit.gguf` 当前与本地 `pr-22836` loader / writer 组合不兼容
 
-建议优先路线：
+补充说明：
+
+- 当前项目目标**不是在 Windows 上做高性能运行**
+- Windows 当前主要用于文档、目录规范、模型下载和最小兼容验证
+- 更贴近目标的平台是 Apple Silicon / ARM 移动端
+
+## 一键初始化
+
+Windows PowerShell:
+
+```powershell
+.\scripts\setup.ps1
+```
+
+macOS / Linux:
+
+```bash
+./scripts/setup.sh
+```
+
+初始化会执行：
+
+- 使用 `uv tool install modelscope` 安装 `modelscope` CLI（如本机未安装）
+- 使用 `modelscope download --model AngelSlim/Hy-MT1.5-1.8B-1.25bit-GGUF --local_dir models/AngelSlim/Hy-MT1.5-1.8B-1.25bit-GGUF` 下载模型
+- 克隆 `https://github.com/ggml-org/llama.cpp.git` 到 `third_party/llama.cpp/`
+- 拉取并 checkout `https://github.com/ggml-org/llama.cpp/pull/22836`
+
+## 本地目录约定
+
+```text
+ai-offline-translator/
+├─ models/                  # 本地模型缓存，不提交大文件
+├─ third_party/llama.cpp/    # llama.cpp PR #22836 工作树
+├─ scripts/                  # 初始化、下载和构建脚本
+└─ docs/                     # 项目文档
+```
+
+MVP 推荐模型：
+
+- `models/AngelSlim/Hy-MT1.5-1.8B-1.25bit-GGUF/Hy-MT1.5-1.8B-STQ1_0.gguf`
+
+模型文件不随仓库提交。大型 `.gguf`、`.bin`、`.safetensors` 和 `.apk` 文件由 `.gitignore` 排除。
+
+## 建议路线
+
 - 使用 `Hy-MT1.5-1.8B-STQ1_0.gguf`
 - 推理层基于包含 `PR #22836` 的 `llama.cpp`
 - App 方案优先采用“Flutter UI + 原生推理层”
+- 平台优先级以 Apple Silicon / ARM 移动端为主，不以 Windows 本地高性能推理为目标
 
-详细资料见 `docs/`。
+## 安全 smoke test
+
+不要在 Windows 上直接运行交互式 `llama-cli` 做验证。请使用受限脚本，避免 CPU/RAM 被长时间占满：
+
+```powershell
+.\scripts\safe_llama_smoketest.ps1
+```
+
+等价的 `uv` 命令：
+
+```powershell
+uv run .\scripts\safe_llama_smoketest.py
+```
+
+默认策略：
+
+- 非交互执行，stdin 关闭
+- 60 秒超时，超时自动 kill
+- 输出超过 64 KiB 自动 kill
+- 默认 `n_ctx=256`、`n_predict=16`、`threads=2`
+- Windows 默认要求 GPU offload；如要测试受限 CPU fallback，必须显式加 `--allow-cpu`
+
+示例：
+
+```powershell
+.\scripts\safe_llama_smoketest.ps1 -AllowCpu -PrintCommand
+```
+
+CPU fallback 只用于最小加载验证，不用于性能测试。
+
+## 资料
+
+- `docs/models_inventory.md`：模型清单与当前结论
+- `docs/llama_pr22836_notes.md`：`llama.cpp` PR #22836 与 `STQ1_0` 加载说明
+- `docs/flutter_mobile_architecture.md`：Flutter UI 与原生推理层架构
+- `docs/llama_windows_safety.md`：Windows 上运行 llama.cpp 的安全规则
+- `docs/validation_status_2026-05-15.md`：本轮验证状态、遇到的问题和已做调整
+- `docs/decision_record_2026-05-15.md`：当前阶段的短决策记录
