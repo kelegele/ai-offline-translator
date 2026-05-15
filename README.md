@@ -1,149 +1,217 @@
-# ai-offline-translator
+# AI离线翻译
 
-离线翻译 App 项目工作目录。当前阶段以文档、模型验证和移动端架构准备为主。
+一个开源的离线翻译 App，基于 [Hy-MT1.5](https://modelscope.cn/models/AngelSlim/Hy-MT1.5-1.8B-1.25bit-GGUF) 大语言模型和 [llama.cpp](https://github.com/ggml-org/llama.cpp) 推理引擎，在手机端本地完成翻译，无需网络。
 
-## 当前结论
+> **一句话原理**：把一个 440MB 的翻译专用大模型量化到 1.25bit（STQ1_0），压缩到可以在手机上跑的体积，再用 llama.cpp 原生引擎加载推理，Flutter 负责跨平台 UI。
 
-- `llama.cpp` 的 `PR #22836` 支持 `STQ1_0`
-- `Hy-MT1.5-1.8B-STQ1_0.gguf` 已在作者本机成功加载并完成翻译推理
-- `Hy-MT1.5-1.8B-2bit.gguf` 当前与本地 `pr-22836` loader / writer 组合不兼容
+## 它是怎么把大模型跑起来的
 
-补充说明：
+### 整体架构
 
-- 当前项目目标**不是在 Windows 上做高性能运行**
-- Windows 当前主要用于文档、目录规范、模型下载和最小兼容验证
-- 更贴近目标的平台是 Apple Silicon / ARM 移动端
-
-## 一键初始化
-
-Windows PowerShell:
-
-```powershell
-.\scripts\setup.ps1
+```
+┌─────────────────────────────────────────────┐
+│              Flutter UI (Dart)              │
+│  翻译页面 / 模型管理 / 语言选择 / 状态展示      │
+└──────────────────┬──────────────────────────┘
+                   │ MethodChannel
+┌──────────────────┴──────────────────────────┐
+│         Platform Bridge (Swift / Kotlin)     │
+│  模型导入下载 / 文件管理 / 线程调度             │
+└──────────────────┬──────────────────────────┘
+                   │ C++ function call
+┌──────────────────┴──────────────────────────┐
+│         TranslatorEngine (C++)               │
+│  llama.cpp 加载模型 / tokenize / 推理 / 采样   │
+└──────────────────┬──────────────────────────┘
+                   │ links against
+┌──────────────────┴──────────────────────────┐
+│    llama.cpp (with PR #22836 for STQ1_0)    │
+│    ggml / llama / common (chat template)     │
+└─────────────────────────────────────────────┘
 ```
 
-macOS / Linux:
+### 关键技术点
+
+**1. 为什么选 STQ1_0 量化**
+
+原始 GGUF 模型约 440MB（1.25bit 量化），手机端加载完全可行。但这个量化格式（STQ1_0）不在 llama.cpp 主线，需要 [PR #22836](https://github.com/ggml-org/llama.cpp/pull/22836) 才能识别和加载。
+
+**2. 推理引擎的核心流程**
+
+`TranslatorEngine`（C++）做了这些事：
+
+1. **加载模型**：`llama_model_load_from_file()` → `llama_init_from_model()`，n_ctx=256, n_threads=2
+2. **解析 chat template**：`common_chat_templates_init()` 解析模型自带的 jinja 模板（Hy-MT1.5 用的是 jinja 格式）
+3. **构建 prompt**：`common_chat_templates_apply()` 把用户消息套进模板，生成完整 prompt
+4. **tokenize**：`common_tokenize()` 将 prompt 转为 token 序列
+5. **推理循环**：`common_prompt_batch_decode()` → `common_sampler_sample()` → `common_token_to_piece()`，逐 token 生成，直到遇到 EOS 或超过 128 token
+6. **取消**：通过 `atomic<bool>` 标记，推理循环每轮检查
+
+> ⚠️ **踩过的坑**：不要手写 prompt 或手动拼接 special tokens。Hy-MT1.5 的 chat template 是 jinja 格式，必须用 `llama.cpp/common` 的 chat template 系列函数处理。之前手写 token 序列导致输出全是乱码（重复字符）。
+
+**3. 平台桥接方式**
+
+| 平台 | 桥接层 | 调用方式 |
+|------|--------|---------|
+| macOS | `TranslatorBridge` (ObjC++) | 直接 C++ 函数调用 |
+| Android | `translator_jni.cpp` (JNI) | JNI native method |
+
+两个平台共用同一份 `translator_engine.cpp`，只是桥接层不同。
+
+**4. 模型管理**
+
+- 模型不内置在 App 包里，用户通过「导入」或「下载」获取
+- 下载源：ModelScope（`https://modelscope.cn/models/AngelSlim/Hy-MT1.5-1.8B-1.25bit-GGUF/`）
+- 模型保存到 App 私有目录：
+  - Android: `files/models/`
+  - macOS/iOS: `Application Support/ai_offline_translator/models/`
+- 启动时自动扫描本地已有模型，找到就自动加载
+
+**5. 构建方式**
+
+| 平台 | llama.cpp 集成方式 |
+|------|-------------------|
+| macOS | Xcode 直接链接静态库（`build-lib/` 目录） |
+| Android | CMake 链接预编译的 arm64-v8a 静态库（`build-android/` 目录） |
+
+Android 构建需要先用 `scripts/build_android_llama.sh` 编译 llama.cpp 的 arm64 静态库。
+
+## 可以复用什么
+
+如果你想在移动端跑大模型，这个项目里可以直接拿走的东西：
+
+### 1. `translator_engine.hpp / .cpp`
+
+纯 C++ 推理引擎封装，不依赖 Flutter。它封装了 llama.cpp 的模型加载、jinja chat template、tokenize、采样和生成循环。你可以直接把它放进任何移动端项目的 native 层。
+
+关键依赖：
+- llama.cpp（需要含 common 模块）
+- C++17
+
+### 2. `build_android_llama.sh`
+
+一键构建 llama.cpp arm64-v8a 静态库的脚本，输出 `.a` 文件给 Android CMake 链接。适用于任何需要在 Android 上跑 llama.cpp 的项目。
+
+### 3. `CMakeLists.txt`（Android JNI 部分）
+
+展示了如何把 C++ 引擎、llama.cpp 静态库、JNI 桥接编译成一个 `.so`。
+
+### 4. macOS 桥接模式
+
+`translator_bridge.mm` 展示了 ObjC++ 如何包装 C++ 引擎并暴露给 Swift/Flutter。这个模式可以复用于任何 iOS 项目。
+
+### 5. 平台差异对照
+
+| | macOS | Android |
+|---|---|---|
+| 语言 | ObjC++ wrapper → C++ | JNI → C++ |
+| 编译 | Xcode 静态链接 | CMake + ndk-build |
+| 模型目录 | Application Support | files/models/ |
+| 文件选择 | NSOpenPanel | FilePicker (Intent) |
+| 下载 | URLSession | OkHttp |
+| ABI | arm64 only | arm64-v8a only |
+
+## 快速开始
+
+### 环境要求
+
+- Flutter SDK
+- macOS: Xcode + Command Line Tools
+- Android: Android Studio + NDK 27+（仅构建 Android 端需要）
+
+### 初始化
 
 ```bash
-./scripts/setup.sh
-```
-
-初始化会执行：
-
-- 使用 `uv tool install modelscope` 安装 `modelscope` CLI（如本机未安装）
-- 使用 `modelscope download --model AngelSlim/Hy-MT1.5-1.8B-1.25bit-GGUF --local_dir models/AngelSlim/Hy-MT1.5-1.8B-1.25bit-GGUF` 下载模型
-- 初始化 Git submodule `third_party/llama.cpp/`
-- 校验 `third_party/llama.cpp/` 固定在 `PR #22836` 对应 commit：`7ef6976b218cfce6158165f4c63a094acb70e707`
-
-如果不运行 setup 脚本，也可以单独初始化第三方依赖：
-
-```bash
+git clone https://github.com/kelegele/ai-offline-translator.git
+cd ai-offline-translator
 git submodule update --init third_party/llama.cpp
 ```
 
-## 本地目录约定
+### 构建 macOS
 
-```text
+```bash
+# 先构建 llama.cpp 静态库
+cd third_party/llama.cpp
+mkdir -p build-lib && cd build-lib
+cmake .. -DLLAMA_CURL=OFF -DBUILD_SHARED_LIBS=OFF \
+  -DLLAMA_BUILD_TOOLS=OFF -DLLAMA_BUILD_EXAMPLES=OFF \
+  -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_SERVER=OFF
+cmake --build . -j$(sysctl -n hw.ncpu) \
+  --target llama --target llama-common \
+  --target ggml --target ggml-cpu --target ggml-base
+cd ../../..
+
+# 构建 Flutter App
+cd flutter_app
+flutter pub get
+flutter run -d macos
+```
+
+### 构建 Android
+
+```bash
+# 先构建 llama.cpp arm64-v8a 静态库（需要 ANDROID_NDK_HOME）
+export ANDROID_NDK_HOME=/path/to/ndk
+./scripts/build_android_llama.sh
+
+# 构建 Flutter App
+cd flutter_app
+flutter pub get
+flutter run -d <android-device>
+```
+
+### 使用
+
+1. 启动 App 后点击右上角「未加载模型」
+2. 选择「下载」从 ModelScope 获取模型，或「导入」选择本地 `.gguf` 文件
+3. 下载/导入完成后点击「加载」
+4. 输入文字，点击「翻译」
+
+## 项目结构
+
+```
 ai-offline-translator/
-├─ models/                  # 本地模型缓存，不提交大文件
-├─ third_party/llama.cpp/    # llama.cpp submodule，固定到 PR #22836 commit
-├─ scripts/                  # 初始化、下载和构建脚本
-└─ docs/                     # 项目文档
+├── flutter_app/
+│   ├── lib/                          # Flutter UI (Dart)
+│   │   ├── features/translator/
+│   │   │   ├── translator_page.dart  # 主页面
+│   │   │   ├── translator_controller.dart
+│   │   │   ├── translator_channel.dart
+│   │   │   └── ...
+│   │   └── design/                   # 设计系统
+│   ├── native/translator_engine/     # ⭐ 共用 C++ 推理引擎
+│   │   ├── translator_engine.hpp
+│   │   └── translator_engine.cpp
+│   ├── macos/Runner/
+│   │   ├── translator_bridge.mm      # macOS ObjC++ 桥接
+│   │   └── TranslatorChannelHandler.swift
+│   ├── android/
+│   │   └── app/src/main/
+│   │       ├── cpp/
+│   │       │   ├── CMakeLists.txt    # Android CMake 构建
+│   │       │   └── translator_jni.cpp  # JNI 桥接
+│   │       └── kotlin/.../
+│   │           └── TranslatorChannelHandler.kt
+│   └── ...
+├── third_party/llama.cpp/            # llama.cpp submodule (PR #22836)
+├── scripts/
+│   └── build_android_llama.sh        # Android arm64 静态库构建
+├── docs/
+│   ├── PRD.md                        # 产品需求
+│   ├── flutter_mobile_architecture.md
+│   └── ...
+├── CHANGELOG.md
+├── AGENTS.md                         # 开发规范与经验教训
+└── DESIGN.md                         # UI 设计规范
 ```
 
-MVP 推荐模型：
+## 致谢
 
-- `models/AngelSlim/Hy-MT1.5-1.8B-1.25bit-GGUF/Hy-MT1.5-1.8B-STQ1_0.gguf`
+- [Hy-MT1.5](https://modelscope.cn/models/AngelSlim/Hy-MT1.5-1.8B-1.25bit-GGUF) — 翻译专用大模型（AngelSlim）
+- [llama.cpp](https://github.com/ggml-org/llama.cpp) — 高效 LLM 推理引擎
+- [llama.cpp PR #22836](https://github.com/ggml-org/llama.cpp/pull/22836) — STQ1_0 量化格式支持
+- [Hy-MT-demo.apk 技术报告](models/AngelSlim/Hy-MT-demo-apk-technical-report.md) — 官方 Demo 逆向分析，指导了原生引擎实现
 
-模型文件不随仓库提交。大型 `.gguf`、`.bin`、`.safetensors` 和 `.apk` 文件由 `.gitignore` 排除。
+## License
 
-## Flutter App
-
-Flutter app 骨架位于 `flutter_app/`。
-
-当前范围：
-
-- 已生成 Android、iOS、macOS 工程目录
-- 首轮验证目标为 macOS
-- translator feature 已支持通过 macOS 文件选择器导入 GGUF 到 App 私有目录，也支持从 ModelScope 下载默认模型
-- 模型选择不支持手填路径；界面只显示模型名称，真实路径仅保存在 App 内部状态
-- macOS 当前通过 `MethodChannel` 调用原生 `TranslatorBridge` / `TranslatorEngine`，直接链接 `llama.cpp` 与 `llama-common`
-- 原生引擎使用 `llama.cpp/common` 的 jinja chat template、tokenize、sampler 能力，避免手写 prompt token 序列导致乱码
-- Android 端已完成 MethodChannelHandler、ModelScope 下载器、`file_picker` 导入和 JNI 翻译桥接骨架
-- 原生 C++ `translator_engine` 已抽取到 `flutter_app/native/translator_engine/`，macOS 和 Android 共用
-- Android JNI 编译需要先构建 llama.cpp arm64-v8a 静态库：`scripts/build_android_llama.sh`
-
-常用命令：
-
-```bash
-cd flutter_app
-/Users/fh/Projects/Flutter/flutter/bin/flutter pub get
-/Users/fh/Projects/Flutter/flutter/bin/flutter test
-/Users/fh/Projects/Flutter/flutter/bin/flutter analyze
-/Users/fh/Projects/Flutter/flutter/bin/flutter run -d macos
-```
-
-macOS 真推理当前使用本机已构建的 `llama.cpp` 静态库：
-
-```bash
-cmake --build third_party/llama.cpp/build-lib --target llama-common -j$(sysctl -n hw.ncpu)
-cd flutter_app
-/Users/fh/Projects/Flutter/flutter/bin/flutter run -d macos
-```
-
-启动后可点击“导入模型”选择本地 GGUF，或点击“下载模型”从 ModelScope 获取默认模型。App 会把模型保存到私有目录：
-
-```text
-~/Library/Application Support/ai_offline_translator/models/
-```
-
-界面只显示模型文件名，不显示完整路径，也不提供可编辑路径输入框。选择或下载完成后，再点击“加载模型”和“翻译”。当前实现优先安全验证，不启用 Metal offload。
-
-## 建议路线
-
-- 使用 `Hy-MT1.5-1.8B-STQ1_0.gguf`
-- 推理层基于包含 `PR #22836` 的 `llama.cpp`
-- App 方案优先采用“Flutter UI + shared native translator_engine + thin platform bridge”
-- 模型优先进入 App 私有目录，避免依赖开发机仓库路径
-- 平台优先级以 Apple Silicon / ARM 移动端为主，不以 Windows 本地高性能推理为目标
-
-## 安全 smoke test
-
-不要在 Windows 上直接运行交互式 `llama-cli` 做验证。请使用受限脚本，避免 CPU/RAM 被长时间占满：
-
-```powershell
-.\scripts\safe_llama_smoketest.ps1
-```
-
-等价的 `uv` 命令：
-
-```powershell
-uv run .\scripts\safe_llama_smoketest.py
-```
-
-默认策略：
-
-- 非交互执行，stdin 关闭
-- 60 秒超时，超时自动 kill
-- 输出超过 64 KiB 自动 kill
-- 默认 `n_ctx=256`、`n_predict=16`、`threads=2`
-- Windows 默认要求 GPU offload；如要测试受限 CPU fallback，必须显式加 `--allow-cpu`
-
-示例：
-
-```powershell
-.\scripts\safe_llama_smoketest.ps1 -AllowCpu -PrintCommand
-```
-
-CPU fallback 只用于最小加载验证，不用于性能测试。
-
-## 资料
-
-- `docs/models_inventory.md`：模型清单与当前结论
-- `docs/PRD.md`：离线翻译 App 产品需求与跨端行为约束
-- `docs/llama_pr22836_notes.md`：`llama.cpp` PR #22836 与 `STQ1_0` 加载说明
-- `docs/flutter_mobile_architecture.md`：Flutter UI 与原生推理层架构
-- `docs/llama_windows_safety.md`：Windows 上运行 llama.cpp 的安全规则
-- `docs/validation_status_2026-05-15.md`：本轮验证状态、遇到的问题和已做调整
-- `docs/validation_status_2026-05-16.md`：原生 common 引擎、App 私有模型目录和 macOS 构建验证
-- `docs/decision_record_2026-05-15.md`：当前阶段的短决策记录
+MIT
