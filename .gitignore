@@ -51,3 +51,4 @@ build/
 **/macos/Flutter/ephemeral/
 **/linux/flutter/ephemeral/
 **/windows/flutter/ephemeral/
+*.dmg
