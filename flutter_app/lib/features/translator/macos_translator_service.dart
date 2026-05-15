@@ -8,6 +8,7 @@ class MacosTranslatorService implements TranslatorService {
     : _channel = channel ?? const TranslatorChannel();
 
   final TranslatorChannel _channel;
+  String? _modelPath;
 
   @override
   Future<void> loadModel({
@@ -15,6 +16,7 @@ class MacosTranslatorService implements TranslatorService {
     required int nCtx,
     required int nThreads,
   }) {
+    _modelPath = path;
     return _channel.loadModel(path: path, nCtx: nCtx, nThreads: nThreads);
   }
 
@@ -28,6 +30,7 @@ class MacosTranslatorService implements TranslatorService {
       text: text,
       sourceLanguage: sourceLanguage,
       targetLanguage: targetLanguage,
+      modelPath: _modelPath ?? '',
     );
   }
 

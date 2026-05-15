@@ -64,6 +64,7 @@ ai-offline-translator/
 ## Flutter 与原生的接口建议
 
 MethodChannel：
+- `importModelFile()`：开发期从文件选择器导入模型到 App 私有目录
 - `loadModel(path, nCtx, nThreads)`
 - `translate(text, srcLang, dstLang)`
 - `cancel()`
@@ -89,9 +90,14 @@ MVP 阶段只支持：
 
 不建议首版同时支持多个模型格式。
 
-移动端交付策略待定。优先候选：
-- 开发期从 `models/` 手动选择模型文件
-- 发布期再决定是否随安装包分发、首启下载或由用户导入
+模型在 App 内的落点：
+- Android：`files/models/`
+- iOS / macOS：`Application Support/ai_offline_translator/models/`
+
+移动端交付策略：
+- 开发期允许从 `models/` 手动导入模型文件，但加载路径应尽快切到 App 私有目录
+- 发布期优先做首启下载或用户导入，不依赖开发机仓库路径
+- 模型导入 / 下载后应做最小文件校验，例如扩展名 `.gguf` 和 GGUF magic header
 
 ## 版本要求
 
@@ -104,6 +110,20 @@ MVP 阶段只支持：
 初始化脚本会从 `https://github.com/ggml-org/llama.cpp.git` 拉取 `refs/pull/22836/head` 到本地 `pr-22836` 分支。
 
 否则 App 不会识别 `STQ1_0`。
+
+## 原生引擎实现约束
+
+`Hy-MT1.5` 的 chat template 是 jinja 模板。原生引擎必须复用 `llama.cpp/common` 层：
+
+- `common_chat_templates_init`
+- `common_chat_templates_apply`
+- `common_tokenize`
+- `common_sampler_init`
+- `common_sampler_sample`
+- `common_sampler_accept`
+- `common_token_to_piece`
+
+不要用裸 `llama_chat_apply_template` 或手写特殊 token 序列替代官方 common 路线。此前手写 token / 非 jinja 模板路径会稳定产生重复乱码。
 
 Windows 备注：
 - 当前 Windows 验证只证明 `STQ1_0` 模型可被 PR 分支加载并完成最小输出

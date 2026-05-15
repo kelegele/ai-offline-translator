@@ -78,7 +78,9 @@ class _TranslatorPageState extends State<TranslatorPage> {
                         controller: _modelPathController,
                         onPathChanged: (value) =>
                             _controller.selectModel(value),
-                        onPickPressed: Platform.isMacOS ? _pickModelFile : null,
+                        onImportPressed: Platform.isMacOS
+                            ? _importModelFile
+                            : null,
                         onLoadPressed: _controller.loadSelectedModel,
                         onUnloadPressed: state.modelState.hasSelection
                             ? _controller.unloadModel
@@ -158,8 +160,8 @@ class _TranslatorPageState extends State<TranslatorPage> {
     );
   }
 
-  Future<void> _pickModelFile() async {
-    final path = await _translatorChannel.pickModelFile();
+  Future<void> _importModelFile() async {
+    final path = await _translatorChannel.importModelFile();
     if (path == null || path.trim().isEmpty) {
       return;
     }
@@ -169,7 +171,7 @@ class _TranslatorPageState extends State<TranslatorPage> {
 
   String _subtitle() {
     if (Platform.isMacOS) {
-      return 'macOS 首版接入本地 GGUF 路径与受限 llama.cpp 推理。';
+      return 'macOS 首版使用原生 llama.cpp 引擎，模型导入到 App 私有目录。';
     }
     return '当前平台仍使用 mock service，macOS 优先接入真推理。';
   }
@@ -248,7 +250,7 @@ class _ModelPanel extends StatelessWidget {
     required this.state,
     required this.controller,
     required this.onPathChanged,
-    required this.onPickPressed,
+    required this.onImportPressed,
     required this.onLoadPressed,
     required this.onUnloadPressed,
   });
@@ -256,14 +258,14 @@ class _ModelPanel extends StatelessWidget {
   final TranslatorState state;
   final TextEditingController controller;
   final ValueChanged<String> onPathChanged;
-  final Future<void> Function()? onPickPressed;
+  final Future<void> Function()? onImportPressed;
   final Future<void> Function() onLoadPressed;
   final Future<void> Function()? onUnloadPressed;
 
   @override
   Widget build(BuildContext context) {
     final helperText = state.modelState.displayName == null
-        ? '手动输入本地 GGUF 模型路径，或点击选择文件'
+        ? '推荐导入 GGUF 到 App 私有目录；也可手动输入路径'
         : '当前模型：${state.modelState.displayName}';
 
     return Container(
@@ -297,8 +299,8 @@ class _ModelPanel extends StatelessWidget {
           Row(
             children: [
               OutlinedButton(
-                onPressed: onPickPressed,
-                child: const Text('选择文件'),
+                onPressed: onImportPressed,
+                child: const Text('导入模型'),
               ),
               const SizedBox(width: AppSpacing.sm),
               FilledButton(

@@ -13,6 +13,10 @@ class TranslatorChannel {
     return _channel.invokeMethod<String>('pickModelFile');
   }
 
+  Future<String?> importModelFile() {
+    return _channel.invokeMethod<String>('importModelFile');
+  }
+
   Future<void> loadModel({
     required String path,
     required int nCtx,
@@ -29,11 +33,13 @@ class TranslatorChannel {
     required String text,
     required String sourceLanguage,
     required String targetLanguage,
+    required String modelPath,
   }) async {
     final result = await _channel.invokeMethod<String>('translate', {
       'text': text,
       'sourceLanguage': sourceLanguage,
       'targetLanguage': targetLanguage,
+      'modelPath': modelPath,
     });
     return result ?? '';
   }

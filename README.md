@@ -65,8 +65,9 @@ Flutter app 骨架位于 `flutter_app/`。
 
 - 已生成 Android、iOS、macOS 工程目录
 - 首轮验证目标为 macOS
-- translator feature 已支持通过 macOS 文件选择器或手动填写本地 GGUF 路径，支持加载/卸载模型状态与取消翻译
-- macOS 首版通过 `MethodChannel` 调用受限 `llama.cpp` CLI 推理：CPU-only、`n_ctx=256`、`n_predict=128`、60 秒超时
+- translator feature 已支持通过 macOS 文件选择器导入 GGUF 到 App 私有目录，也保留手动填写路径
+- macOS 当前通过 `MethodChannel` 调用原生 `TranslatorBridge` / `TranslatorEngine`，直接链接 `llama.cpp` 与 `llama-common`
+- 原生引擎使用 `llama.cpp/common` 的 jinja chat template、tokenize、sampler 能力，避免手写 prompt token 序列导致乱码
 - 非 macOS 平台当前仍保留确定性的 mock service，后续再接原生推理层
 
 常用命令：
@@ -79,14 +80,21 @@ cd flutter_app
 /Users/fh/Projects/Flutter/flutter/bin/flutter run -d macos
 ```
 
-macOS 真推理首版使用本机已构建的 `llama-completion`：
+macOS 真推理当前使用本机已构建的 `llama.cpp` 静态库：
 
 ```bash
+cmake --build third_party/llama.cpp/build-lib --target llama-common -j$(sysctl -n hw.ncpu)
 cd flutter_app
 /Users/fh/Projects/Flutter/flutter/bin/flutter run -d macos
 ```
 
-启动后点击“选择文件”或在“GGUF 路径”中填写模型路径，例如：
+启动后点击“导入模型”，App 会把 GGUF 复制到私有目录：
+
+```text
+~/Library/Application Support/ai_offline_translator/models/
+```
+
+也可以继续在“GGUF 路径”中手动填写模型路径，例如：
 
 ```text
 ../models/AngelSlim/Hy-MT1.5-1.8B-1.25bit-GGUF/Hy-MT1.5-1.8B-STQ1_0.gguf
@@ -98,7 +106,8 @@ cd flutter_app
 
 - 使用 `Hy-MT1.5-1.8B-STQ1_0.gguf`
 - 推理层基于包含 `PR #22836` 的 `llama.cpp`
-- App 方案优先采用“Flutter UI + 原生推理层”
+- App 方案优先采用“Flutter UI + shared native translator_engine + thin platform bridge”
+- 模型优先进入 App 私有目录，避免依赖开发机仓库路径
 - 平台优先级以 Apple Silicon / ARM 移动端为主，不以 Windows 本地高性能推理为目标
 
 ## 安全 smoke test
@@ -138,4 +147,5 @@ CPU fallback 只用于最小加载验证，不用于性能测试。
 - `docs/flutter_mobile_architecture.md`：Flutter UI 与原生推理层架构
 - `docs/llama_windows_safety.md`：Windows 上运行 llama.cpp 的安全规则
 - `docs/validation_status_2026-05-15.md`：本轮验证状态、遇到的问题和已做调整
+- `docs/validation_status_2026-05-16.md`：原生 common 引擎、App 私有模型目录和 macOS 构建验证
 - `docs/decision_record_2026-05-15.md`：当前阶段的短决策记录
