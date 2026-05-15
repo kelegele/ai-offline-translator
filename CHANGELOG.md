@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- 新增 `docs/PRD.md`，记录模型导入、模型下载、不可手填路径和跨端一致性要求。
+
 ## v0.0.2 - 2026-05-16
 
 ### Added

@@ -138,6 +138,7 @@ CPU fallback 只用于最小加载验证，不用于性能测试。
 ## 资料
 
 - `docs/models_inventory.md`：模型清单与当前结论
+- `docs/PRD.md`：离线翻译 App 产品需求与跨端行为约束
 - `docs/llama_pr22836_notes.md`：`llama.cpp` PR #22836 与 `STQ1_0` 加载说明
 - `docs/flutter_mobile_architecture.md`：Flutter UI 与原生推理层架构
 - `docs/llama_windows_safety.md`：Windows 上运行 llama.cpp 的安全规则
