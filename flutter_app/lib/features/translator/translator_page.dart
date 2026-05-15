@@ -45,9 +45,7 @@ class _TranslatorPageState extends State<TranslatorPage> {
     super.dispose();
   }
 
-  void _onTextChanged() {
-    setState(() {});
-  }
+  void _onTextChanged() => setState(() {});
 
   int get _characterCount {
     final text = _textController.text;
@@ -56,53 +54,50 @@ class _TranslatorPageState extends State<TranslatorPage> {
 
   bool get _isMobile => Platform.isAndroid || Platform.isIOS;
 
-  // --- Model bottom sheet ---
+  // --- Model sheet (stays open during import) ---
 
   void _showModelSheet() {
-    final state = _controller.state;
+    // state read below // used in builder
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      builder: (context) => _ModelSheet(
-        state: state,
-        onImport: () {
-          Navigator.pop(context);
-          _importModel();
-        },
+      builder: (sheetContext) => _ModelSheet(
+        state: _controller.state,
+        onImport: () => _importModelFromSheet(sheetContext),
         onDownload: () {
-          Navigator.pop(context);
+          Navigator.pop(sheetContext);
           _downloadDefaultModel();
         },
         onLoad: () {
-          Navigator.pop(context);
+          Navigator.pop(sheetContext);
           _controller.loadSelectedModel();
         },
         onUnload: () {
-          Navigator.pop(context);
+          Navigator.pop(sheetContext);
           _controller.unloadModel();
         },
         onCancelDownload: () {
-          Navigator.pop(context);
+          Navigator.pop(sheetContext);
           _cancelModelDownload();
         },
       ),
     );
   }
 
-  // --- Model actions ---
-
-  Future<void> _importModel() async {
+  Future<void> _importModelFromSheet(BuildContext sheetContext) async {
     String? path;
     if (Platform.isAndroid) {
       path = await _importAndroidModel();
     } else {
       path = await _translatorChannel.importModelFile();
     }
-    if (path == null || path.trim().isEmpty) return;
-    _controller.selectModel(path);
+    if (path != null && path.trim().isNotEmpty) {
+      _controller.selectModel(path);
+    }
+    // sheet stays open so user can see model name and click 加载
   }
 
   Future<String?> _importAndroidModel() async {
@@ -136,7 +131,7 @@ class _TranslatorPageState extends State<TranslatorPage> {
       _controller.startModelDownload(path);
     } on Object {
       _downloadPollTimer?.cancel();
-      _controller.failModelDownload('模型下载失败，请检查网络后重试。');
+      _controller.failModelDownload('下载失败，请检查网络后重试。');
     }
   }
 
@@ -155,17 +150,14 @@ class _TranslatorPageState extends State<TranslatorPage> {
         final status = await _translatorChannel.getModelDownloadStatus();
         final st = status['state'] as String? ?? 'idle';
         if (st == 'downloading') {
-          final received = (status['receivedBytes'] as num?)?.toInt() ?? 0;
-          final total = (status['totalBytes'] as num?)?.toInt() ?? 0;
-          final message = status['message'] as String? ?? '';
           _controller.updateModelDownloadProgress(
-            receivedBytes: received,
-            totalBytes: total,
-            message: message,
+            receivedBytes: (status['receivedBytes'] as num?)?.toInt() ?? 0,
+            totalBytes: (status['totalBytes'] as num?)?.toInt() ?? 0,
+            message: status['message'] as String? ?? '',
           );
         }
       } on Object {
-        // ignore polling errors
+        // ignore
       }
     });
   }
@@ -177,30 +169,29 @@ class _TranslatorPageState extends State<TranslatorPage> {
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, _) {
-        final state = _controller.state;
-        final bottom = MediaQuery.of(context).padding.bottom;
+        final state = _controller.state; // used in builder
         final isMobile = _isMobile;
+        final hPadding = isMobile ? AppSpacing.md : 48.0;
 
         return Scaffold(
           backgroundColor: AppColors.canvas,
           body: SafeArea(
             child: Column(
               children: [
-                Divider(height: 1, thickness: 1, color: AppColors.hairline),
                 _buildNavBar(state),
                 Expanded(
                   child: CustomScrollView(
                     slivers: [
                       SliverToBoxAdapter(
                         child: Padding(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: isMobile
-                                ? AppSpacing.md
-                                : AppSpacing.xl,
+                          padding: EdgeInsets.fromLTRB(
+                            hPadding,
+                            AppSpacing.md,
+                            hPadding,
+                            0,
                           ),
                           child: Column(
                             children: [
-                              const SizedBox(height: AppSpacing.md),
                               _LangBar(
                                 sourceLanguage: state.sourceLanguage,
                                 targetLanguage: state.targetLanguage,
@@ -246,17 +237,9 @@ class _TranslatorPageState extends State<TranslatorPage> {
                                         : null,
                                     child: const Text('取消'),
                                   ),
-                                  const Spacer(),
-                                  TextButton(
-                                    onPressed: () {
-                                      _textController.clear();
-                                      _controller.clear();
-                                    },
-                                    child: const Text('清空'),
-                                  ),
                                 ],
                               ),
-                              const SizedBox(height: AppSpacing.md),
+                              const SizedBox(height: AppSpacing.sm),
                             ],
                           ),
                         ),
@@ -264,29 +247,23 @@ class _TranslatorPageState extends State<TranslatorPage> {
                       SliverFillRemaining(
                         hasScrollBody: true,
                         child: Padding(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: isMobile
-                                ? AppSpacing.md
-                                : AppSpacing.xl,
-                          ),
+                          padding: EdgeInsets.symmetric(horizontal: hPadding),
                           child: _OutputPanel(state: state),
                         ),
                       ),
                       SliverToBoxAdapter(
                         child: Padding(
                           padding: EdgeInsets.only(
-                            bottom: bottom > 0 ? bottom : AppSpacing.md,
+                            top: AppSpacing.sm,
+                            bottom:
+                                AppSpacing.md +
+                                MediaQuery.of(context).padding.bottom,
                           ),
                           child: Center(
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                vertical: AppSpacing.sm,
-                              ),
-                              child: Text(
-                                '结果由 AI 生成，仅供参考',
-                                style: Theme.of(context).textTheme.labelSmall
-                                    ?.copyWith(color: AppColors.muted),
-                              ),
+                            child: Text(
+                              '结果由 AI 生成，仅供参考',
+                              style: Theme.of(context).textTheme.labelSmall
+                                  ?.copyWith(color: AppColors.muted),
                             ),
                           ),
                         ),
@@ -310,31 +287,27 @@ class _TranslatorPageState extends State<TranslatorPage> {
     final isDownloading = state.modelDownloadState.isDownloading;
 
     String label;
-    IconData icon;
     Color bgColor;
     Color textColor;
 
     if (isDownloading) {
       label = '下载中…';
-      icon = Icons.cloud_download;
       bgColor = AppColors.brandBlue.withValues(alpha: 0.1);
       textColor = AppColors.brandBlue;
     } else if (isLoaded && modelName != null) {
-      label = modelName.length > 12
-          ? '${modelName.substring(0, 12)}…'
+      label = modelName.length > 14
+          ? '${modelName.substring(0, 14)}…'
           : modelName;
-      icon = Icons.check_circle;
       bgColor = AppColors.successBackground;
       textColor = AppColors.successText;
     } else {
-      label = '未加载';
-      icon = Icons.warning_amber;
+      label = '未加载模型';
       bgColor = const Color(0xFFFFF3CD);
       textColor = const Color(0xFF856404);
     }
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(bottom: BorderSide(color: AppColors.hairline)),
@@ -359,8 +332,10 @@ class _TranslatorPageState extends State<TranslatorPage> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(icon, size: 16, color: textColor),
-                  const SizedBox(width: 6),
+                  if (isLoaded) ...[
+                    Icon(Icons.check_circle, size: 14, color: textColor),
+                    const SizedBox(width: 6),
+                  ],
                   Text(
                     label,
                     style: TextStyle(
@@ -381,7 +356,7 @@ class _TranslatorPageState extends State<TranslatorPage> {
   }
 }
 
-// --- Language pill bar ---
+// --- Language bar ---
 
 class _LangBar extends StatelessWidget {
   const _LangBar({
@@ -393,7 +368,6 @@ class _LangBar extends StatelessWidget {
   });
 
   static const languages = ['英语', '中文', '日语', '韩语'];
-
   final String sourceLanguage;
   final String targetLanguage;
   final ValueChanged<String> onSourceChanged;
@@ -403,103 +377,45 @@ class _LangBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        GestureDetector(
-          onTap: () => _showLanguageMenu(context, sourceLanguage, true),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              border: Border.all(color: AppColors.hairline),
-              borderRadius: const BorderRadius.horizontal(
-                left: Radius.circular(10),
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  sourceLanguage,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(width: 6),
-                Icon(
-                  Icons.keyboard_arrow_down,
-                  size: 16,
-                  color: AppColors.steel,
-                ),
-              ],
-            ),
+        Expanded(
+          child: _LangButton(
+            label: sourceLanguage,
+            onTap: () => _showLangMenu(context, true),
           ),
         ),
-        GestureDetector(
-          onTap: onSwap,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              border: const Border.symmetric(
-                vertical: BorderSide(color: AppColors.hairline),
-              ),
-            ),
-            child: const Icon(
-              Icons.swap_horiz,
-              size: 20,
-              color: AppColors.steel,
-            ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: IconButton(
+            icon: const Icon(Icons.swap_horiz, size: 22),
+            color: AppColors.steel,
+            onPressed: onSwap,
+            visualDensity: VisualDensity.compact,
           ),
         ),
-        GestureDetector(
-          onTap: () => _showLanguageMenu(context, targetLanguage, false),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              border: Border.all(color: AppColors.hairline),
-              borderRadius: const BorderRadius.horizontal(
-                right: Radius.circular(10),
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  targetLanguage,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(width: 6),
-                Icon(
-                  Icons.keyboard_arrow_down,
-                  size: 16,
-                  color: AppColors.steel,
-                ),
-              ],
-            ),
+        Expanded(
+          child: _LangButton(
+            label: targetLanguage,
+            onTap: () => _showLangMenu(context, false),
           ),
         ),
       ],
     );
   }
 
-  void _showLanguageMenu(BuildContext context, String current, bool isSource) {
+  void _showLangMenu(BuildContext context, bool isSource) {
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      builder: (context) => Padding(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 30),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(8, 12, 8, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
                 width: 36,
                 height: 4,
                 decoration: BoxDecoration(
@@ -507,32 +423,67 @@ class _LangBar extends StatelessWidget {
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              isSource ? '选择源语言' : '选择目标语言',
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 12),
-            ...languages.map(
-              (lang) => ListTile(
-                title: Text(lang),
-                trailing: lang == current
-                    ? const Icon(Icons.check, size: 20)
-                    : null,
-                onTap: () {
-                  if (isSource) {
-                    onSourceChanged(lang);
-                  } else {
-                    onTargetChanged(lang);
-                  }
-                  Navigator.pop(context);
-                },
+              const SizedBox(height: 16),
+              Text(
+                isSource ? '源语言' : '目标语言',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
               ),
-            ),
-          ],
+              const SizedBox(height: 8),
+              ...languages.map(
+                (lang) => ListTile(
+                  title: Text(lang),
+                  trailing: lang == (isSource ? sourceLanguage : targetLanguage)
+                      ? Icon(Icons.check, size: 20, color: AppColors.brandBlue)
+                      : null,
+                  onTap: () {
+                    if (isSource)
+                      onSourceChanged(lang);
+                    else
+                      onTargetChanged(lang);
+                    Navigator.pop(ctx);
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LangButton extends StatelessWidget {
+  const _LangButton({required this.label, required this.onTap});
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          border: Border.all(color: AppColors.hairline),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Center(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(width: 4),
+              Icon(Icons.keyboard_arrow_down, size: 16, color: AppColors.steel),
+            ],
+          ),
         ),
       ),
     );
@@ -541,72 +492,96 @@ class _LangBar extends StatelessWidget {
 
 // --- Input panel ---
 
-class _InputPanel extends StatelessWidget {
+class _InputPanel extends StatefulWidget {
   const _InputPanel({
     required this.controller,
     required this.characterCount,
     required this.onChanged,
   });
-
   final TextEditingController controller;
   final int characterCount;
   final ValueChanged<String> onChanged;
 
   @override
+  State<_InputPanel> createState() => _InputPanelState();
+}
+
+class _InputPanelState extends State<_InputPanel> {
+  final _focusNode = FocusNode();
+  bool _hasFocus = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(
+      () => setState(() => _hasFocus = _focusNode.hasFocus),
+    );
+  }
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(left: 4, bottom: 4),
-                child: Row(
-                  children: [
-                    Text(
-                      '原文',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.labelSmall?.copyWith(color: AppColors.steel),
-                    ),
-                    const Spacer(),
-                    Text(
-                      '$characterCount/200',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.labelSmall?.copyWith(color: AppColors.steel),
-                    ),
-                  ],
+    final hasText = widget.controller.text.isNotEmpty;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.canvas,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(
+          color: _hasFocus ? AppColors.brandBlue : AppColors.hairline,
+          width: _hasFocus ? 1.5 : 1,
+        ),
+      ),
+      child: Stack(
+        children: [
+          TextField(
+            controller: widget.controller,
+            focusNode: _focusNode,
+            minLines: 5,
+            maxLines: 7,
+            textInputAction: TextInputAction.newline,
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(height: 1.6),
+            decoration: const InputDecoration(
+              hintText: '输入要翻译的内容',
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.fromLTRB(14, 12, 44, 28),
+            ),
+            onChanged: widget.onChanged,
+          ),
+          // Clear button — top-right corner
+          if (hasText)
+            Positioned(
+              top: 8,
+              right: 6,
+              child: SizedBox(
+                height: 28,
+                width: 28,
+                child: IconButton(
+                  icon: const Icon(Icons.close, size: 18),
+                  color: AppColors.steel,
+                  padding: EdgeInsets.zero,
+                  onPressed: hasText ? () => widget.controller.clear() : null,
                 ),
               ),
-              TextField(
-                controller: controller,
-                minLines: 4,
-                maxLines: 6,
-                textInputAction: TextInputAction.newline,
-                decoration: const InputDecoration(
-                  hintText: '输入要离线翻译的文本',
-                  border: OutlineInputBorder(),
-                ),
-                onChanged: onChanged,
-              ),
-            ],
+            ),
+          // Character count — bottom-right corner
+          Positioned(
+            bottom: 6,
+            right: 12,
+            child: Text(
+              '${widget.characterCount}/200',
+              style: Theme.of(
+                context,
+              ).textTheme.labelSmall?.copyWith(color: AppColors.muted),
+            ),
           ),
-        ),
-        const SizedBox(width: 8),
-        Padding(
-          padding: const EdgeInsets.only(top: 20),
-          child: IconButton(
-            icon: const Icon(Icons.close, size: 20),
-            color: AppColors.steel,
-            onPressed: controller.text.isEmpty
-                ? null
-                : () => controller.clear(),
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -615,7 +590,6 @@ class _InputPanel extends StatelessWidget {
 
 class _OutputPanel extends StatelessWidget {
   const _OutputPanel({required this.state});
-
   final TranslatorState state;
 
   @override
@@ -627,11 +601,12 @@ class _OutputPanel extends StatelessWidget {
         : AppColors.ink;
 
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
         color: AppColors.surface,
         border: Border.all(color: AppColors.hairline),
-        borderRadius: BorderRadius.circular(AppRadius.xl),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -649,11 +624,9 @@ class _OutputPanel extends StatelessWidget {
                 height: 32,
                 child: TextButton.icon(
                   onPressed: state.status == TranslatorStatus.completed
-                      ? () {
-                          Clipboard.setData(
-                            ClipboardData(text: state.outputText),
-                          );
-                        }
+                      ? () => Clipboard.setData(
+                          ClipboardData(text: state.outputText),
+                        )
                       : null,
                   icon: const Icon(Icons.copy, size: 16),
                   label: const Text('复制'),
@@ -668,7 +641,7 @@ class _OutputPanel extends StatelessWidget {
                 content,
                 style: textTheme.bodyLarge?.copyWith(
                   color: contentColor,
-                  height: 1.5,
+                  height: 1.6,
                 ),
               ),
             ),
@@ -680,19 +653,20 @@ class _OutputPanel extends StatelessWidget {
 
   String _contentForState() {
     return switch (state.status) {
-      TranslatorStatus.idle => '请先加载模型，然后开始翻译。',
-      TranslatorStatus.ready => state.modelState.isReady ? '准备好了。' : '请先加载模型。',
-      TranslatorStatus.translating => '正在翻译...',
+      TranslatorStatus.idle => '译文将在这里显示',
+      TranslatorStatus.ready =>
+        state.modelState.isReady ? '已就绪，可以翻译。' : '请先加载模型。',
+      TranslatorStatus.translating => '正在翻译…',
       TranslatorStatus.completed => state.outputText,
       TranslatorStatus.cancelled => '翻译已取消。',
-      TranslatorStatus.error => state.errorMessage ?? '出现错误。',
+      TranslatorStatus.error => state.errorMessage ?? '发生错误。',
     };
   }
 }
 
 // --- Model bottom sheet ---
 
-class _ModelSheet extends StatelessWidget {
+class _ModelSheet extends StatefulWidget {
   const _ModelSheet({
     required this.state,
     required this.onImport,
@@ -710,15 +684,28 @@ class _ModelSheet extends StatelessWidget {
   final VoidCallback onCancelDownload;
 
   @override
+  State<_ModelSheet> createState() => _ModelSheetState();
+}
+
+class _ModelSheetState extends State<_ModelSheet> {
+  // Rebuild when controller state changes (e.g. import completes)
+  @override
+  void initState() {
+    super.initState();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final modelName = state.modelState.displayName ?? '未选择模型';
-    final isLoaded = state.modelState.isReady;
-    final hasSelection = state.modelState.hasSelection;
-    final isDownloading = state.modelDownloadState.isDownloading;
-    final isLoading = state.modelState.status == ModelLifecycleStatus.loading;
+    // Use the latest state from a static notifier
+    final modelName = widget.state.modelState.displayName ?? '未选择模型';
+    final isLoaded = widget.state.modelState.isReady;
+    final hasSelection = widget.state.modelState.hasSelection;
+    final isDownloading = widget.state.modelDownloadState.isDownloading;
+    final isLoading =
+        widget.state.modelState.status == ModelLifecycleStatus.loading;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 30),
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -735,12 +722,12 @@ class _ModelSheet extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            '模型管理',
+            '模型',
             style: Theme.of(
               context,
             ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(AppSpacing.md),
@@ -766,78 +753,79 @@ class _ModelSheet extends StatelessWidget {
                     color: isLoaded ? AppColors.successText : AppColors.ink,
                   ),
                 ),
-                if (state.modelState.errorMessage != null) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    state.modelState.errorMessage!,
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodySmall?.copyWith(color: AppColors.errorText),
+                const SizedBox(height: 4),
+                Text(
+                  widget.state.modelState.errorMessage ??
+                      (hasSelection ? '已就绪，可以加载' : '请导入或下载模型'),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: widget.state.modelState.errorMessage != null
+                        ? AppColors.errorText
+                        : AppColors.steel,
                   ),
-                ] else ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    hasSelection
-                        ? '模型已保存到 App 私有目录'
-                        : '请导入本地 GGUF，或从 ModelScope 下载默认模型',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodySmall?.copyWith(color: AppColors.steel),
-                  ),
-                ],
+                ),
               ],
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
               OutlinedButton.icon(
-                onPressed: isDownloading ? null : onImport,
-                icon: const Icon(Icons.file_upload, size: 18),
+                onPressed: isDownloading ? null : widget.onImport,
+                icon: const Icon(Icons.upload_file, size: 18),
                 label: const Text('导入'),
               ),
               OutlinedButton.icon(
-                onPressed: isDownloading ? null : onDownload,
+                onPressed: isDownloading ? null : widget.onDownload,
                 icon: const Icon(Icons.cloud_download, size: 18),
                 label: const Text('下载'),
               ),
               if (isDownloading)
                 OutlinedButton.icon(
-                  onPressed: onCancelDownload,
+                  onPressed: widget.onCancelDownload,
                   icon: const Icon(Icons.cancel, size: 18),
                   label: const Text('取消下载'),
                 ),
               if (hasSelection)
                 FilledButton.icon(
-                  onPressed: isLoading ? null : onLoad,
+                  onPressed: isLoading ? null : widget.onLoad,
                   icon: const Icon(Icons.bolt, size: 18),
                   label: const Text('加载'),
                 ),
               if (isLoaded)
                 OutlinedButton.icon(
-                  onPressed: onUnload,
+                  onPressed: widget.onUnload,
                   icon: const Icon(Icons.delete_outline, size: 18),
                   label: const Text('卸载'),
                 ),
             ],
           ),
           if (isDownloading) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             Text(
-              state.modelDownloadState.progressLabel,
+              widget.state.modelDownloadState.progressLabel,
               style: Theme.of(
                 context,
               ).textTheme.bodySmall?.copyWith(color: AppColors.steel),
             ),
           ],
-          const SizedBox(height: 12),
-          Text(
-            isLoaded ? '✅ 本地模型已就绪' : '⚠️ 未加载模型',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: isLoaded ? AppColors.successText : AppColors.steel,
-            ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Icon(
+                isLoaded ? Icons.check_circle : Icons.info_outline,
+                size: 14,
+                color: isLoaded ? AppColors.successText : AppColors.muted,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                isLoaded ? '模型已就绪' : '模型未加载',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: isLoaded ? AppColors.successText : AppColors.steel,
+                ),
+              ),
+            ],
           ),
         ],
       ),
