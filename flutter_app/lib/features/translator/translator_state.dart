@@ -1,3 +1,4 @@
+import 'model_download_state.dart';
 import 'model_selection_state.dart';
 
 enum TranslatorStatus { idle, ready, translating, completed, cancelled, error }
@@ -11,6 +12,7 @@ class TranslatorState {
     this.targetLanguage = '中文',
     this.runtimeStatus = '未加载模型',
     this.modelState = const ModelSelectionState(),
+    this.modelDownloadState = const ModelDownloadState(),
     this.errorMessage,
   });
 
@@ -21,6 +23,7 @@ class TranslatorState {
   final String targetLanguage;
   final String runtimeStatus;
   final ModelSelectionState modelState;
+  final ModelDownloadState modelDownloadState;
   final String? errorMessage;
 
   bool get canTranslate =>
@@ -36,6 +39,7 @@ class TranslatorState {
     String? targetLanguage,
     String? runtimeStatus,
     ModelSelectionState? modelState,
+    ModelDownloadState? modelDownloadState,
     String? errorMessage,
     bool clearError = false,
   }) {
@@ -47,6 +51,7 @@ class TranslatorState {
       targetLanguage: targetLanguage ?? this.targetLanguage,
       runtimeStatus: runtimeStatus ?? this.runtimeStatus,
       modelState: modelState ?? this.modelState,
+      modelDownloadState: modelDownloadState ?? this.modelDownloadState,
       errorMessage: clearError ? null : errorMessage ?? this.errorMessage,
     );
   }
