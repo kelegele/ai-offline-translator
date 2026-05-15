@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
@@ -20,15 +21,14 @@ class TranslatorPage extends StatefulWidget {
 
 class _TranslatorPageState extends State<TranslatorPage> {
   late final TextEditingController _textController;
-  late final TextEditingController _modelPathController;
   late final TranslatorController _controller;
   final TranslatorChannel _translatorChannel = const TranslatorChannel();
+  Timer? _downloadPollTimer;
 
   @override
   void initState() {
     super.initState();
     _textController = TextEditingController();
-    _modelPathController = TextEditingController();
     _controller = TranslatorController(
       service: createDefaultTranslatorService(),
     );
@@ -38,8 +38,8 @@ class _TranslatorPageState extends State<TranslatorPage> {
   @override
   void dispose() {
     _textController.removeListener(_onTextChanged);
+    _downloadPollTimer?.cancel();
     _textController.dispose();
-    _modelPathController.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -75,11 +75,15 @@ class _TranslatorPageState extends State<TranslatorPage> {
                       const SizedBox(height: AppSpacing.xl),
                       _ModelPanel(
                         state: state,
-                        controller: _modelPathController,
-                        onPathChanged: (value) =>
-                            _controller.selectModel(value),
                         onImportPressed: Platform.isMacOS
                             ? _importModelFile
+                            : null,
+                        onDownloadPressed: Platform.isMacOS
+                            ? _downloadDefaultModel
+                            : null,
+                        onCancelDownloadPressed:
+                            state.modelDownloadState.isDownloading
+                            ? _cancelModelDownload
                             : null,
                         onLoadPressed: _controller.loadSelectedModel,
                         onUnloadPressed: state.modelState.hasSelection
@@ -165,8 +169,48 @@ class _TranslatorPageState extends State<TranslatorPage> {
     if (path == null || path.trim().isEmpty) {
       return;
     }
-    _modelPathController.text = path;
     _controller.selectModel(path);
+  }
+
+  Future<void> _downloadDefaultModel() async {
+    _controller.beginModelDownload();
+    _startDownloadPolling();
+    try {
+      final path = await _translatorChannel.downloadDefaultModel();
+      _downloadPollTimer?.cancel();
+      if (path == null || path.trim().isEmpty) {
+        _controller.cancelModelDownload();
+        return;
+      }
+      _controller.startModelDownload(path);
+    } on Object {
+      _downloadPollTimer?.cancel();
+      _controller.failModelDownload('模型下载失败，请检查网络后重试。');
+    }
+  }
+
+  Future<void> _cancelModelDownload() async {
+    await _translatorChannel.cancelModelDownload();
+    _downloadPollTimer?.cancel();
+    _controller.cancelModelDownload();
+  }
+
+  void _startDownloadPolling() {
+    _downloadPollTimer?.cancel();
+    _downloadPollTimer = Timer.periodic(const Duration(milliseconds: 500), (
+      _,
+    ) async {
+      final status = await _translatorChannel.getModelDownloadStatus();
+      final state = status['state'] as String? ?? 'idle';
+      if (state != 'downloading') {
+        return;
+      }
+      _controller.updateModelDownloadProgress(
+        receivedBytes: status['receivedBytes'] as int? ?? 0,
+        totalBytes: status['totalBytes'] as int? ?? 0,
+        message: status['message'] as String? ?? '正在下载模型',
+      );
+    });
   }
 
   String _subtitle() {
@@ -248,25 +292,26 @@ class _Header extends StatelessWidget {
 class _ModelPanel extends StatelessWidget {
   const _ModelPanel({
     required this.state,
-    required this.controller,
-    required this.onPathChanged,
     required this.onImportPressed,
+    required this.onDownloadPressed,
+    required this.onCancelDownloadPressed,
     required this.onLoadPressed,
     required this.onUnloadPressed,
   });
 
   final TranslatorState state;
-  final TextEditingController controller;
-  final ValueChanged<String> onPathChanged;
   final Future<void> Function()? onImportPressed;
+  final Future<void> Function()? onDownloadPressed;
+  final Future<void> Function()? onCancelDownloadPressed;
   final Future<void> Function() onLoadPressed;
   final Future<void> Function()? onUnloadPressed;
 
   @override
   Widget build(BuildContext context) {
-    final helperText = state.modelState.displayName == null
-        ? '推荐导入 GGUF 到 App 私有目录；也可手动输入路径'
-        : '当前模型：${state.modelState.displayName}';
+    final modelName = state.modelState.displayName ?? '未选择模型';
+    final modelHint = state.modelState.displayName == null
+        ? '请导入本地 GGUF，或从 ModelScope 下载默认模型'
+        : '模型路径已保存到 App 内部状态，不在界面展示';
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.xl),
@@ -285,15 +330,49 @@ class _ModelPanel extends StatelessWidget {
             ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: AppSpacing.md),
-          TextField(
-            controller: controller,
-            decoration: InputDecoration(
-              labelText: 'GGUF 路径',
-              hintText: '粘贴本地模型路径',
-              helperText: helperText,
-              errorText: state.modelState.errorMessage,
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: AppSpacing.sm,
             ),
-            onChanged: onPathChanged,
+            decoration: BoxDecoration(
+              color: AppColors.canvas,
+              border: Border.all(
+                color: state.modelState.errorMessage == null
+                    ? AppColors.hairline
+                    : AppColors.errorText,
+              ),
+              borderRadius: BorderRadius.circular(AppRadius.md),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '当前模型',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelSmall?.copyWith(color: AppColors.steel),
+                ),
+                const SizedBox(height: AppSpacing.xxs),
+                Text(
+                  modelName,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppColors.ink,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xxs),
+                Text(
+                  state.modelState.errorMessage ?? modelHint,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: state.modelState.errorMessage == null
+                        ? AppColors.steel
+                        : AppColors.errorText,
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: AppSpacing.md),
           Row(
@@ -302,6 +381,20 @@ class _ModelPanel extends StatelessWidget {
                 onPressed: onImportPressed,
                 child: const Text('导入模型'),
               ),
+              const SizedBox(width: AppSpacing.sm),
+              OutlinedButton(
+                onPressed: state.modelDownloadState.isDownloading
+                    ? null
+                    : onDownloadPressed,
+                child: const Text('下载模型'),
+              ),
+              if (state.modelDownloadState.isDownloading) ...[
+                const SizedBox(width: AppSpacing.sm),
+                OutlinedButton(
+                  onPressed: onCancelDownloadPressed,
+                  child: const Text('取消下载'),
+                ),
+              ],
               const SizedBox(width: AppSpacing.sm),
               FilledButton(
                 onPressed:
@@ -329,6 +422,15 @@ class _ModelPanel extends StatelessWidget {
               ),
             ],
           ),
+          if (state.modelDownloadState.isDownloading) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              state.modelDownloadState.progressLabel,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: AppColors.steel),
+            ),
+          ],
         ],
       ),
     );
