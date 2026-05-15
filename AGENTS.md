@@ -22,6 +22,7 @@
 - `cd flutter_app && flutter run`：在已连接设备或模拟器上启动应用。
 
 如后续引入 Python，所有 Python 操作必须通过 `uv` 执行，例如 `uv run`、`uv add` 或 `uv sync`。
+即使只使用标准库的内联脚本（如一行的 `uv run python -c "..."`），也必须走 `uv run`，禁止直接调用系统 `python3`。
 
 第三方依赖使用 Git submodule 管理：
 

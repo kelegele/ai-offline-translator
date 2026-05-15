@@ -31,4 +31,14 @@ Expected MVP file:
 
 - `models/AngelSlim/Hy-MT1.5-1.8B-1.25bit-GGUF/Hy-MT1.5-1.8B-STQ1_0.gguf`
 
+The full upstream ModelScope snapshot currently includes:
+
+- `README.md`
+- `License.txt`
+- `Hy-MT1.5-1.8B-STQ1_0.gguf`
+- `Hy-MT1.5-1.8B-1.25bit.gguf`
+- `Hy-MT-demo.apk`
+- `app_demo.gif`, `demo2.gif`, `fp16vs1.25bit.gif`
+- `Sherry.png`, `flores_model_size.png`, `model_scores.png`
+
 Large model files are ignored by Git. Do not commit `.gguf`, `.bin`, `.safetensors`, or `.apk` files.

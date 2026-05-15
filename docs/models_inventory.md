@@ -30,6 +30,26 @@ modelscope download --model AngelSlim/Hy-MT1.5-1.8B-1.25bit-GGUF --local_dir mod
 - `models/AngelSlim/Hy-MT1.5-1.8B-1.25bit-GGUF/Hy-MT1.5-1.8B-STQ1_0.gguf`
 - `models/AngelSlim/Hy-MT1.5-1.8B-1.25bit-GGUF/Hy-MT1.5-1.8B-1.25bit.gguf`
 
+截至 2026-05-15，本机已用以下命令补全该 ModelScope 仓库快照：
+
+```powershell
+modelscope download --model AngelSlim/Hy-MT1.5-1.8B-1.25bit-GGUF --local_dir models/AngelSlim/Hy-MT1.5-1.8B-1.25bit-GGUF
+```
+
+当前本地快照文件：
+
+- `README.md`
+- `License.txt`
+- `Hy-MT1.5-1.8B-STQ1_0.gguf`
+- `Hy-MT1.5-1.8B-1.25bit.gguf`
+- `Hy-MT-demo.apk`
+- `app_demo.gif`
+- `demo2.gif`
+- `fp16vs1.25bit.gif`
+- `Sherry.png`
+- `flores_model_size.png`
+- `model_scores.png`
+
 ## 推荐的 MVP 模型
 
 推荐优先使用：
