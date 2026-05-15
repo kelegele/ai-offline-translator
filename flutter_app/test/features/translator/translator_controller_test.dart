@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:ai_offline_translator/features/translator/model_selection_state.dart';
 import 'package:ai_offline_translator/features/translator/translator_controller.dart';
 import 'package:ai_offline_translator/features/translator/translator_service.dart';
 import 'package:ai_offline_translator/features/translator/translator_state.dart';
@@ -65,9 +66,53 @@ class ThrowingTranslatorService implements TranslatorService {
   Future<String> getModelStatus() async => '原生桥接未连接';
 }
 
+class RecordingTranslatorService implements TranslatorService {
+  RecordingTranslatorService({this.translateResult = '你好'});
+
+  final String translateResult;
+  String? loadedPath;
+  int cancelCount = 0;
+  String modelStatus = '未加载模型';
+
+  @override
+  Future<void> loadModel({
+    required String path,
+    required int nCtx,
+    required int nThreads,
+  }) async {
+    loadedPath = path;
+    modelStatus = '本地模型已就绪';
+  }
+
+  @override
+  Future<String> translate({
+    required String text,
+    required String sourceLanguage,
+    required String targetLanguage,
+  }) async {
+    return translateResult;
+  }
+
+  @override
+  Future<void> cancel() async {
+    cancelCount += 1;
+  }
+
+  @override
+  Future<void> unloadModel() async {
+    loadedPath = null;
+    modelStatus = '未加载模型';
+  }
+
+  @override
+  Future<String> getModelStatus() async => modelStatus;
+}
+
 void main() {
   test('initial state is idle with default languages', () {
-    final controller = TranslatorController(service: const MockTranslatorService());
+    final controller = TranslatorController(
+      service: const MockTranslatorService(),
+    );
 
     expect(controller.state.status, TranslatorStatus.idle);
     expect(controller.state.sourceLanguage, '英语');
@@ -75,7 +120,9 @@ void main() {
   });
 
   test('empty input is rejected without calling translation', () async {
-    final controller = TranslatorController(service: const MockTranslatorService());
+    final controller = TranslatorController(
+      service: const MockTranslatorService(),
+    );
 
     await controller.translate('   ');
 
@@ -84,7 +131,10 @@ void main() {
   });
 
   test('successful translation updates output', () async {
-    final controller = TranslatorController(service: const MockTranslatorService());
+    final service = RecordingTranslatorService();
+    final controller = TranslatorController(service: service);
+    controller.selectModel('/tmp/Hy-MT1.5-1.8B-STQ1_0.gguf');
+    await controller.loadSelectedModel();
 
     await controller.translate('Hello');
 
@@ -94,7 +144,11 @@ void main() {
   });
 
   test('service errors are surfaced', () async {
-    final controller = TranslatorController(service: const ThrowingTranslatorService());
+    final controller = TranslatorController(
+      service: const ThrowingTranslatorService(),
+    );
+    controller.selectModel('/tmp/demo.gguf');
+    await controller.loadSelectedModel();
 
     await controller.translate('Hello');
 
@@ -103,26 +157,72 @@ void main() {
   });
 
   test('cancel sets cancelled state', () async {
-    final controller = TranslatorController(service: const MockTranslatorService());
+    final controller = TranslatorController(
+      service: const MockTranslatorService(),
+    );
 
     await controller.cancel();
 
     expect(controller.state.status, TranslatorStatus.cancelled);
   });
 
-  test('cancel prevents in-flight translation from overwriting state', () async {
-    final completer = Completer<String>();
+  test(
+    'cancel prevents in-flight translation from overwriting state',
+    () async {
+      final completer = Completer<String>();
+      final service = DelayedTranslatorService(completer);
+      final controller = TranslatorController(service: service);
+      controller.selectModel('/tmp/demo.gguf');
+      await controller.loadSelectedModel();
+      controller.updateInput('Hello');
+      final translation = controller.translate();
+      await controller.cancel();
+      completer.complete('你好');
+      await translation;
+
+      expect(controller.state.status, TranslatorStatus.cancelled);
+      expect(controller.state.outputText, isEmpty);
+    },
+  );
+
+  test('selecting model stores path and file name', () {
     final controller = TranslatorController(
-      service: DelayedTranslatorService(completer),
+      service: RecordingTranslatorService(),
     );
 
-    controller.updateInput('Hello');
-    final translation = controller.translate();
-    await controller.cancel();
-    completer.complete('你好');
-    await translation;
+    controller.selectModel('/tmp/Hy-MT1.5-1.8B-STQ1_0.gguf');
 
-    expect(controller.state.status, TranslatorStatus.cancelled);
-    expect(controller.state.outputText, isEmpty);
+    expect(
+      controller.state.modelState.selectedPath,
+      '/tmp/Hy-MT1.5-1.8B-STQ1_0.gguf',
+    );
+    expect(
+      controller.state.modelState.displayName,
+      'Hy-MT1.5-1.8B-STQ1_0.gguf',
+    );
+  });
+
+  test('loadModel updates model state to ready', () async {
+    final service = RecordingTranslatorService();
+    final controller = TranslatorController(service: service);
+    controller.selectModel('/tmp/Hy-MT1.5-1.8B-STQ1_0.gguf');
+
+    await controller.loadSelectedModel();
+
+    expect(service.loadedPath, '/tmp/Hy-MT1.5-1.8B-STQ1_0.gguf');
+    expect(controller.state.modelState.status, ModelLifecycleStatus.ready);
+    expect(controller.state.runtimeStatus, '本地模型已就绪');
+  });
+
+  test('translate fails when no model is ready', () async {
+    final controller = TranslatorController(
+      service: RecordingTranslatorService(),
+    );
+    controller.updateInput('Hello');
+
+    await controller.translate();
+
+    expect(controller.state.status, TranslatorStatus.error);
+    expect(controller.state.errorMessage, '请先加载模型。');
   });
 }

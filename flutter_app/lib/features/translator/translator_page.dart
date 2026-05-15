@@ -1,9 +1,13 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 
 import '../../design/app_colors.dart';
 import '../../design/app_spacing.dart';
+import 'macos_translator_service.dart';
+import 'model_selection_state.dart';
+import 'translator_channel.dart';
 import 'translator_controller.dart';
-import 'translator_service.dart';
 import 'translator_state.dart';
 
 class TranslatorPage extends StatefulWidget {
@@ -15,18 +19,24 @@ class TranslatorPage extends StatefulWidget {
 
 class _TranslatorPageState extends State<TranslatorPage> {
   late final TextEditingController _textController;
+  late final TextEditingController _modelPathController;
   late final TranslatorController _controller;
+  final TranslatorChannel _translatorChannel = const TranslatorChannel();
 
   @override
   void initState() {
     super.initState();
     _textController = TextEditingController();
-    _controller = TranslatorController(service: const MockTranslatorService());
+    _modelPathController = TextEditingController();
+    _controller = TranslatorController(
+      service: createDefaultTranslatorService(),
+    );
   }
 
   @override
   void dispose() {
     _textController.dispose();
+    _modelPathController.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -44,10 +54,24 @@ class _TranslatorPageState extends State<TranslatorPage> {
                 constraints: const BoxConstraints(maxWidth: 920),
                 child: Padding(
                   padding: const EdgeInsets.all(AppSpacing.xl),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                  child: ListView(
                     children: [
-                      _Header(status: _statusLabel(state.status)),
+                      _Header(
+                        status: _statusLabel(state),
+                        subtitle: _subtitle(),
+                      ),
+                      const SizedBox(height: AppSpacing.xl),
+                      _ModelPanel(
+                        state: state,
+                        controller: _modelPathController,
+                        onPathChanged: (value) =>
+                            _controller.selectModel(value),
+                        onPickPressed: Platform.isMacOS ? _pickModelFile : null,
+                        onLoadPressed: _controller.loadSelectedModel,
+                        onUnloadPressed: state.modelState.hasSelection
+                            ? _controller.unloadModel
+                            : null,
+                      ),
                       const SizedBox(height: AppSpacing.xl),
                       _LanguageRow(
                         sourceLanguage: state.sourceLanguage,
@@ -71,14 +95,19 @@ class _TranslatorPageState extends State<TranslatorPage> {
                       Row(
                         children: [
                           FilledButton(
-                            onPressed: state.status == TranslatorStatus.translating
+                            onPressed:
+                                state.status == TranslatorStatus.translating ||
+                                    !state.canTranslate
                                 ? null
-                                : () => _controller.translate(_textController.text),
+                                : () => _controller.translate(
+                                    _textController.text,
+                                  ),
                             child: const Text('翻译'),
                           ),
                           const SizedBox(width: AppSpacing.sm),
                           OutlinedButton(
-                            onPressed: state.status == TranslatorStatus.translating
+                            onPressed:
+                                state.status == TranslatorStatus.translating
                                 ? _controller.cancel
                                 : null,
                             child: const Text('取消'),
@@ -94,7 +123,7 @@ class _TranslatorPageState extends State<TranslatorPage> {
                         ],
                       ),
                       const SizedBox(height: AppSpacing.xl),
-                      Expanded(child: _OutputPanel(state: state)),
+                      SizedBox(height: 260, child: _OutputPanel(state: state)),
                     ],
                   ),
                 ),
@@ -106,22 +135,44 @@ class _TranslatorPageState extends State<TranslatorPage> {
     );
   }
 
-  String _statusLabel(TranslatorStatus status) {
-    return switch (status) {
-      TranslatorStatus.idle => '本地模型已就绪',
-      TranslatorStatus.ready => '准备翻译',
-      TranslatorStatus.translating => '正在本地翻译',
-      TranslatorStatus.completed => '翻译完成',
-      TranslatorStatus.cancelled => '翻译已取消',
-      TranslatorStatus.error => '需要处理',
-    };
+  Future<void> _pickModelFile() async {
+    final path = await _translatorChannel.pickModelFile();
+    if (path == null || path.trim().isEmpty) {
+      return;
+    }
+    _modelPathController.text = path;
+    _controller.selectModel(path);
+  }
+
+  String _subtitle() {
+    if (Platform.isMacOS) {
+      return 'macOS 首版接入本地 GGUF 路径与受限 llama.cpp 推理。';
+    }
+    return '当前平台仍使用 mock service，macOS 优先接入真推理。';
+  }
+
+  String _statusLabel(TranslatorState state) {
+    if (state.status == TranslatorStatus.translating) {
+      return '正在本地翻译';
+    }
+    if (state.status == TranslatorStatus.completed) {
+      return '翻译完成';
+    }
+    if (state.status == TranslatorStatus.cancelled) {
+      return '翻译已取消';
+    }
+    if (state.status == TranslatorStatus.error) {
+      return '需要处理';
+    }
+    return state.runtimeStatus;
   }
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.status});
+  const _Header({required this.status, required this.subtitle});
 
   final String status;
+  final String subtitle;
 
   @override
   Widget build(BuildContext context) {
@@ -141,7 +192,7 @@ class _Header extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.xs),
               Text(
-                'Flutter UI 骨架，后续接入原生 llama.cpp。',
+                subtitle,
                 style: textTheme.bodyMedium?.copyWith(color: AppColors.steel),
               ),
             ],
@@ -165,6 +216,96 @@ class _Header extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _ModelPanel extends StatelessWidget {
+  const _ModelPanel({
+    required this.state,
+    required this.controller,
+    required this.onPathChanged,
+    required this.onPickPressed,
+    required this.onLoadPressed,
+    required this.onUnloadPressed,
+  });
+
+  final TranslatorState state;
+  final TextEditingController controller;
+  final ValueChanged<String> onPathChanged;
+  final Future<void> Function()? onPickPressed;
+  final Future<void> Function() onLoadPressed;
+  final Future<void> Function()? onUnloadPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final helperText = state.modelState.displayName == null
+        ? '手动输入本地 GGUF 模型路径，或点击选择文件'
+        : '当前模型：${state.modelState.displayName}';
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.xl),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        border: Border.all(color: AppColors.hairline),
+        borderRadius: BorderRadius.circular(AppRadius.xl),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '模型',
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          TextField(
+            controller: controller,
+            decoration: InputDecoration(
+              labelText: 'GGUF 路径',
+              hintText: '粘贴本地模型路径',
+              helperText: helperText,
+              errorText: state.modelState.errorMessage,
+            ),
+            onChanged: onPathChanged,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
+              OutlinedButton(
+                onPressed: onPickPressed,
+                child: const Text('选择文件'),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              FilledButton(
+                onPressed:
+                    state.modelState.status == ModelLifecycleStatus.loading
+                    ? null
+                    : onLoadPressed,
+                child: const Text('加载模型'),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              OutlinedButton(
+                onPressed:
+                    state.modelState.status == ModelLifecycleStatus.unloading
+                    ? null
+                    : onUnloadPressed,
+                child: const Text('卸载模型'),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Text(
+                  state.runtimeStatus,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: AppColors.steel),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
@@ -225,7 +366,10 @@ class _LanguageMenu extends StatelessWidget {
       initialValue: value,
       decoration: InputDecoration(labelText: label),
       items: _LanguageRow.languages
-          .map((language) => DropdownMenuItem(value: language, child: Text(language)))
+          .map(
+            (language) =>
+                DropdownMenuItem(value: language, child: Text(language)),
+          )
           .toList(),
       onChanged: (language) {
         if (language != null) {
@@ -245,8 +389,9 @@ class _OutputPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final content = _contentForState();
-    final contentColor =
-        state.status == TranslatorStatus.error ? AppColors.errorText : AppColors.ink;
+    final contentColor = state.status == TranslatorStatus.error
+        ? AppColors.errorText
+        : AppColors.ink;
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.xl),
@@ -267,7 +412,10 @@ class _OutputPanel extends StatelessWidget {
             child: SingleChildScrollView(
               child: Text(
                 content,
-                style: textTheme.bodyLarge?.copyWith(color: contentColor, height: 1.5),
+                style: textTheme.bodyLarge?.copyWith(
+                  color: contentColor,
+                  height: 1.5,
+                ),
               ),
             ),
           ),
@@ -278,8 +426,8 @@ class _OutputPanel extends StatelessWidget {
 
   String _contentForState() {
     return switch (state.status) {
-      TranslatorStatus.idle => '译文会显示在这里。',
-      TranslatorStatus.ready => '准备好了。',
+      TranslatorStatus.idle => '请先加载模型，然后开始翻译。',
+      TranslatorStatus.ready => state.modelState.isReady ? '准备好了。' : '请先加载模型。',
       TranslatorStatus.translating => '正在翻译...',
       TranslatorStatus.completed => state.outputText,
       TranslatorStatus.cancelled => '翻译已取消。',

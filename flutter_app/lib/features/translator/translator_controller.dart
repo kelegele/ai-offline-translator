@@ -1,10 +1,14 @@
+import 'dart:io' show FileSystemException, Platform;
+
 import 'package:flutter/foundation.dart';
 
+import 'model_selection_state.dart';
 import 'translator_service.dart';
 import 'translator_state.dart';
 
 class TranslatorController extends ChangeNotifier {
-  TranslatorController({required TranslatorService service}) : _service = service;
+  TranslatorController({required TranslatorService service})
+    : _service = service;
 
   final TranslatorService _service;
 
@@ -16,7 +20,9 @@ class TranslatorController extends ChangeNotifier {
   void updateInput(String text) {
     _state = _state.copyWith(
       inputText: text,
-      status: text.trim().isEmpty ? TranslatorStatus.idle : TranslatorStatus.ready,
+      status: text.trim().isEmpty
+          ? TranslatorStatus.idle
+          : TranslatorStatus.ready,
       clearError: true,
     );
     notifyListeners();
@@ -32,6 +38,85 @@ class TranslatorController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void selectModel(String path) {
+    final trimmed = path.trim();
+    if (trimmed.isEmpty) {
+      _state = _state.copyWith(
+        runtimeStatus: '未加载模型',
+        modelState: const ModelSelectionState(),
+        clearError: true,
+      );
+      notifyListeners();
+      return;
+    }
+
+    _state = _state.copyWith(
+      runtimeStatus: '已选择模型，等待加载',
+      modelState: ModelSelectionState(
+        status: ModelLifecycleStatus.selected,
+        selectedPath: trimmed,
+        displayName: trimmed.split(Platform.pathSeparator).last,
+      ),
+      clearError: true,
+    );
+    notifyListeners();
+  }
+
+  Future<void> loadSelectedModel() async {
+    final path = _state.modelState.selectedPath;
+    if (path == null || path.trim().isEmpty) {
+      _state = _state.copyWith(
+        status: TranslatorStatus.error,
+        runtimeStatus: '未选择模型',
+        modelState: _state.modelState.copyWith(
+          status: ModelLifecycleStatus.failed,
+          errorMessage: '请先填写 GGUF 模型路径。',
+        ),
+        errorMessage: '请先填写 GGUF 模型路径。',
+      );
+      notifyListeners();
+      return;
+    }
+
+    _state = _state.copyWith(
+      runtimeStatus: '正在加载模型',
+      modelState: _state.modelState.copyWith(
+        status: ModelLifecycleStatus.loading,
+        clearError: true,
+      ),
+      clearError: true,
+    );
+    notifyListeners();
+
+    try {
+      await _service.loadModel(path: path, nCtx: 256, nThreads: 2);
+      final runtimeStatus = await _service.getModelStatus();
+      _state = _state.copyWith(
+        status: _state.inputText.trim().isEmpty
+            ? TranslatorStatus.idle
+            : TranslatorStatus.ready,
+        runtimeStatus: runtimeStatus,
+        modelState: _state.modelState.copyWith(
+          status: ModelLifecycleStatus.ready,
+          clearError: true,
+        ),
+        clearError: true,
+      );
+    } on Object catch (error) {
+      final message = _messageFor(error);
+      _state = _state.copyWith(
+        status: TranslatorStatus.error,
+        runtimeStatus: '模型加载失败',
+        modelState: _state.modelState.copyWith(
+          status: ModelLifecycleStatus.failed,
+          errorMessage: message,
+        ),
+        errorMessage: message,
+      );
+    }
+    notifyListeners();
+  }
+
   Future<void> translate([String? text]) async {
     final trimmed = (text ?? _state.inputText).trim();
     if (trimmed.isEmpty) {
@@ -39,6 +124,16 @@ class TranslatorController extends ChangeNotifier {
         status: TranslatorStatus.error,
         inputText: text,
         errorMessage: '请输入要翻译的内容。',
+      );
+      notifyListeners();
+      return;
+    }
+
+    if (!_state.modelState.isReady) {
+      _state = _state.copyWith(
+        status: TranslatorStatus.error,
+        inputText: trimmed,
+        errorMessage: '请先加载模型。',
       );
       notifyListeners();
       return;
@@ -74,7 +169,7 @@ class TranslatorController extends ChangeNotifier {
       }
       _state = _state.copyWith(
         status: TranslatorStatus.error,
-        errorMessage: error is StateError ? error.message : error.toString(),
+        errorMessage: _messageFor(error),
       );
     }
     notifyListeners();
@@ -87,8 +182,43 @@ class TranslatorController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void clear() {
-    _state = const TranslatorState();
+  Future<void> unloadModel() async {
+    _requestToken++;
+    _state = _state.copyWith(
+      runtimeStatus: '正在卸载模型',
+      modelState: _state.modelState.copyWith(
+        status: ModelLifecycleStatus.unloading,
+      ),
+    );
     notifyListeners();
+    await _service.unloadModel();
+    _state = _state.copyWith(
+      status: TranslatorStatus.idle,
+      runtimeStatus: '未加载模型',
+      modelState: const ModelSelectionState(),
+      outputText: '',
+      clearError: true,
+    );
+    notifyListeners();
+  }
+
+  void clear() {
+    _state = TranslatorState(
+      sourceLanguage: _state.sourceLanguage,
+      targetLanguage: _state.targetLanguage,
+      runtimeStatus: _state.runtimeStatus,
+      modelState: _state.modelState,
+    );
+    notifyListeners();
+  }
+
+  String _messageFor(Object error) {
+    if (error is StateError) {
+      return error.message;
+    }
+    if (error is FileSystemException) {
+      return error.message;
+    }
+    return error.toString();
   }
 }

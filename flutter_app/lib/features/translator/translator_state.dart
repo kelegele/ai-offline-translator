@@ -1,11 +1,6 @@
-enum TranslatorStatus {
-  idle,
-  ready,
-  translating,
-  completed,
-  cancelled,
-  error,
-}
+import 'model_selection_state.dart';
+
+enum TranslatorStatus { idle, ready, translating, completed, cancelled, error }
 
 class TranslatorState {
   const TranslatorState({
@@ -14,6 +9,8 @@ class TranslatorState {
     this.outputText = '',
     this.sourceLanguage = '英语',
     this.targetLanguage = '中文',
+    this.runtimeStatus = '未加载模型',
+    this.modelState = const ModelSelectionState(),
     this.errorMessage,
   });
 
@@ -22,10 +19,14 @@ class TranslatorState {
   final String outputText;
   final String sourceLanguage;
   final String targetLanguage;
+  final String runtimeStatus;
+  final ModelSelectionState modelState;
   final String? errorMessage;
 
   bool get canTranslate =>
-      inputText.trim().isNotEmpty && status != TranslatorStatus.translating;
+      inputText.trim().isNotEmpty &&
+      status != TranslatorStatus.translating &&
+      modelState.isReady;
 
   TranslatorState copyWith({
     TranslatorStatus? status,
@@ -33,6 +34,8 @@ class TranslatorState {
     String? outputText,
     String? sourceLanguage,
     String? targetLanguage,
+    String? runtimeStatus,
+    ModelSelectionState? modelState,
     String? errorMessage,
     bool clearError = false,
   }) {
@@ -42,6 +45,8 @@ class TranslatorState {
       outputText: outputText ?? this.outputText,
       sourceLanguage: sourceLanguage ?? this.sourceLanguage,
       targetLanguage: targetLanguage ?? this.targetLanguage,
+      runtimeStatus: runtimeStatus ?? this.runtimeStatus,
+      modelState: modelState ?? this.modelState,
       errorMessage: clearError ? null : errorMessage ?? this.errorMessage,
     );
   }

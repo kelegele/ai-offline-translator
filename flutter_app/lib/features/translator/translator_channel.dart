@@ -1,31 +1,52 @@
+import 'package:flutter/services.dart';
+
 class TranslatorChannel {
-  const TranslatorChannel();
+  const TranslatorChannel({
+    MethodChannel channel = const MethodChannel(
+      'ai_offline_translator/translator',
+    ),
+  }) : _channel = channel;
+
+  final MethodChannel _channel;
+
+  Future<String?> pickModelFile() {
+    return _channel.invokeMethod<String>('pickModelFile');
+  }
 
   Future<void> loadModel({
     required String path,
     required int nCtx,
     required int nThreads,
-  }) {
-    throw UnimplementedError('Native model loading is not connected yet.');
+  }) async {
+    await _channel.invokeMethod<void>('loadModel', {
+      'path': path,
+      'nCtx': nCtx,
+      'nThreads': nThreads,
+    });
   }
 
   Future<String> translate({
     required String text,
     required String sourceLanguage,
     required String targetLanguage,
-  }) {
-    throw UnimplementedError('Native translation is not connected yet.');
+  }) async {
+    final result = await _channel.invokeMethod<String>('translate', {
+      'text': text,
+      'sourceLanguage': sourceLanguage,
+      'targetLanguage': targetLanguage,
+    });
+    return result ?? '';
   }
 
-  Future<void> cancel() {
-    throw UnimplementedError('Native cancellation is not connected yet.');
+  Future<void> cancel() async {
+    await _channel.invokeMethod<void>('cancel');
   }
 
-  Future<void> unloadModel() {
-    throw UnimplementedError('Native model unloading is not connected yet.');
+  Future<void> unloadModel() async {
+    await _channel.invokeMethod<void>('unloadModel');
   }
 
   Future<String> getModelStatus() async {
-    return 'Native bridge not connected';
+    return await _channel.invokeMethod<String>('getModelStatus') ?? '原生桥接未连接';
   }
 }

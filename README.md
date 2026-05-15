@@ -65,8 +65,9 @@ Flutter app 骨架位于 `flutter_app/`。
 
 - 已生成 Android、iOS、macOS 工程目录
 - 首轮验证目标为 macOS
-- translator feature 当前使用确定性的 mock service
-- 原生 `llama.cpp` 集成暂时延后，通过 `TranslatorChannel` 预留边界
+- translator feature 已支持通过 macOS 文件选择器或手动填写本地 GGUF 路径，支持加载/卸载模型状态与取消翻译
+- macOS 首版通过 `MethodChannel` 调用受限 `llama.cpp` CLI 推理：CPU-only、`n_ctx=256`、`n_predict=128`、60 秒超时
+- 非 macOS 平台当前仍保留确定性的 mock service，后续再接原生推理层
 
 常用命令：
 
@@ -77,6 +78,21 @@ cd flutter_app
 /Users/fh/Projects/Flutter/flutter/bin/flutter analyze
 /Users/fh/Projects/Flutter/flutter/bin/flutter run -d macos
 ```
+
+macOS 真推理首版使用本机已构建的 `llama-completion`：
+
+```bash
+cd flutter_app
+/Users/fh/Projects/Flutter/flutter/bin/flutter run -d macos
+```
+
+启动后点击“选择文件”或在“GGUF 路径”中填写模型路径，例如：
+
+```text
+../models/AngelSlim/Hy-MT1.5-1.8B-1.25bit-GGUF/Hy-MT1.5-1.8B-STQ1_0.gguf
+```
+
+再点击“加载模型”和“翻译”。当前实现优先安全验证，不启用 Metal offload。
 
 ## 建议路线
 
