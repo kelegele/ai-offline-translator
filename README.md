@@ -57,6 +57,27 @@ MVP 推荐模型：
 
 模型文件不随仓库提交。大型 `.gguf`、`.bin`、`.safetensors` 和 `.apk` 文件由 `.gitignore` 排除。
 
+## Flutter App
+
+Flutter app 骨架位于 `flutter_app/`。
+
+当前范围：
+
+- 已生成 Android、iOS、macOS 工程目录
+- 首轮验证目标为 macOS
+- translator feature 当前使用确定性的 mock service
+- 原生 `llama.cpp` 集成暂时延后，通过 `TranslatorChannel` 预留边界
+
+常用命令：
+
+```bash
+cd flutter_app
+/Users/fh/Projects/Flutter/flutter/bin/flutter pub get
+/Users/fh/Projects/Flutter/flutter/bin/flutter test
+/Users/fh/Projects/Flutter/flutter/bin/flutter analyze
+/Users/fh/Projects/Flutter/flutter/bin/flutter run -d macos
+```
+
 ## 建议路线
 
 - 使用 `Hy-MT1.5-1.8B-STQ1_0.gguf`
