@@ -4,6 +4,23 @@ import FlutterMacOS
 final class TranslatorChannelHandler: NSObject {
   private let channelName = "ai_offline_translator/translator"
   private let bridge = TranslatorBridge()
+  private let defaultModelFilename = "Hy-MT1.5-1.8B-STQ1_0.gguf"
+  private let defaultModelURL = URL(string: "https://modelscope.cn/models/AngelSlim/Hy-MT1.5-1.8B-1.25bit-GGUF/resolve/master/Hy-MT1.5-1.8B-STQ1_0.gguf")!
+  private let minimumModelBytes: Int64 = 100 * 1024 * 1024
+  private var downloadTask: URLSessionDownloadTask?
+  private var downloadStatus: [String: Any] = [
+    "state": "idle",
+    "receivedBytes": 0,
+    "totalBytes": 0,
+    "message": "",
+    "path": NSNull()
+  ]
+  private lazy var downloadSession = URLSession(
+    configuration: .default,
+    delegate: self,
+    delegateQueue: nil
+  )
+  private var pendingDownloadResult: FlutterResult?
 
   func register(with controller: FlutterViewController) {
     let channel = FlutterMethodChannel(name: channelName, binaryMessenger: controller.engine.binaryMessenger)
@@ -18,6 +35,15 @@ final class TranslatorChannelHandler: NSObject {
       pickModelFile(result: result)
     case "importModelFile":
       importModelFile(result: result)
+    case "getDefaultModelInfo":
+      result(defaultModelInfo())
+    case "downloadDefaultModel":
+      downloadDefaultModel(result: result)
+    case "cancelModelDownload":
+      cancelModelDownload()
+      result(nil)
+    case "getModelDownloadStatus":
+      result(downloadStatus)
     case "loadModel":
       guard let args = call.arguments as? [String: Any],
             let path = args["path"] as? String,
@@ -118,16 +144,7 @@ final class TranslatorChannelHandler: NSObject {
       throw NSError(domain: "Translator", code: 11, userInfo: [NSLocalizedDescriptionKey: "文件不是有效的 GGUF 模型。"])
     }
 
-    let supportURL = try FileManager.default.url(
-      for: .applicationSupportDirectory,
-      in: .userDomainMask,
-      appropriateFor: nil,
-      create: true
-    )
-    let modelsURL = supportURL
-      .appendingPathComponent("ai_offline_translator", isDirectory: true)
-      .appendingPathComponent("models", isDirectory: true)
-    try FileManager.default.createDirectory(at: modelsURL, withIntermediateDirectories: true)
+    let modelsURL = try modelsDirectoryURL()
 
     let destinationURL = modelsURL.appendingPathComponent(sourceURL.lastPathComponent)
     if FileManager.default.fileExists(atPath: destinationURL.path) {
@@ -140,5 +157,190 @@ final class TranslatorChannelHandler: NSObject {
     }
     try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
     return destinationURL
+  }
+
+  private func defaultModelInfo() -> [String: Any] {
+    return [
+      "id": "hymt15_18b_stq10",
+      "displayName": "Hy-MT1.5 1.8B STQ1_0",
+      "filename": defaultModelFilename,
+      "downloadUrl": defaultModelURL.absoluteString
+    ]
+  }
+
+  private func modelsDirectoryURL() throws -> URL {
+    let supportURL = try FileManager.default.url(
+      for: .applicationSupportDirectory,
+      in: .userDomainMask,
+      appropriateFor: nil,
+      create: true
+    )
+    let modelsURL = supportURL
+      .appendingPathComponent("ai_offline_translator", isDirectory: true)
+      .appendingPathComponent("models", isDirectory: true)
+    try FileManager.default.createDirectory(at: modelsURL, withIntermediateDirectories: true)
+    return modelsURL
+  }
+
+  private func defaultModelDestinationURL() throws -> URL {
+    return try modelsDirectoryURL().appendingPathComponent(defaultModelFilename)
+  }
+
+  private func downloadDefaultModel(result: @escaping FlutterResult) {
+    do {
+      let destinationURL = try defaultModelDestinationURL()
+      if FileManager.default.fileExists(atPath: destinationURL.path),
+         isValidGGUF(at: destinationURL, minimumBytes: minimumModelBytes) {
+        updateDownloadStatus(
+          state: "completed",
+          receivedBytes: 0,
+          totalBytes: 0,
+          message: "模型已存在",
+          path: destinationURL.path
+        )
+        result(destinationURL.path)
+        return
+      }
+    } catch {
+      result(FlutterError(code: "download_failed", message: "模型保存失败，请检查磁盘空间。", details: nil))
+      return
+    }
+
+    if downloadTask != nil {
+      result(FlutterError(code: "download_in_progress", message: "模型正在下载。", details: nil))
+      return
+    }
+
+    pendingDownloadResult = result
+    updateDownloadStatus(
+      state: "downloading",
+      receivedBytes: 0,
+      totalBytes: 0,
+      message: "正在连接 ModelScope",
+      path: nil
+    )
+    let task = downloadSession.downloadTask(with: defaultModelURL)
+    downloadTask = task
+    task.resume()
+  }
+
+  private func cancelModelDownload() {
+    downloadTask?.cancel()
+    downloadTask = nil
+    updateDownloadStatus(
+      state: "cancelled",
+      receivedBytes: 0,
+      totalBytes: 0,
+      message: "下载已取消。",
+      path: nil
+    )
+    pendingDownloadResult?(nil)
+    pendingDownloadResult = nil
+  }
+
+  private func isValidGGUF(at url: URL, minimumBytes: Int64 = 0) -> Bool {
+    guard url.pathExtension.lowercased() == "gguf" else { return false }
+    guard let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize,
+          Int64(size) >= minimumBytes else { return false }
+    guard let handle = try? FileHandle(forReadingFrom: url) else { return false }
+    defer { handle.closeFile() }
+    return handle.readData(ofLength: 4) == Data([0x47, 0x47, 0x55, 0x46])
+  }
+
+  private func updateDownloadStatus(
+    state: String,
+    receivedBytes: Int64,
+    totalBytes: Int64,
+    message: String,
+    path: String?
+  ) {
+    downloadStatus = [
+      "state": state,
+      "receivedBytes": receivedBytes,
+      "totalBytes": totalBytes,
+      "message": message,
+      "path": path ?? NSNull()
+    ]
+  }
+}
+
+extension TranslatorChannelHandler: URLSessionDownloadDelegate {
+  func urlSession(
+    _ session: URLSession,
+    downloadTask: URLSessionDownloadTask,
+    didWriteData bytesWritten: Int64,
+    totalBytesWritten: Int64,
+    totalBytesExpectedToWrite: Int64
+  ) {
+    updateDownloadStatus(
+      state: "downloading",
+      receivedBytes: totalBytesWritten,
+      totalBytes: max(totalBytesExpectedToWrite, 0),
+      message: "正在下载模型",
+      path: nil
+    )
+  }
+
+  func urlSession(
+    _ session: URLSession,
+    downloadTask: URLSessionDownloadTask,
+    didFinishDownloadingTo location: URL
+  ) {
+    do {
+      let destinationURL = try defaultModelDestinationURL()
+      guard isValidGGUF(at: location, minimumBytes: minimumModelBytes) else {
+        throw NSError(domain: "Translator", code: 21, userInfo: [NSLocalizedDescriptionKey: "下载文件不是有效的 GGUF 模型。"])
+      }
+      if FileManager.default.fileExists(atPath: destinationURL.path) {
+        try FileManager.default.removeItem(at: destinationURL)
+      }
+      try FileManager.default.moveItem(at: location, to: destinationURL)
+      updateDownloadStatus(
+        state: "completed",
+        receivedBytes: 0,
+        totalBytes: 0,
+        message: "模型已下载",
+        path: destinationURL.path
+      )
+      DispatchQueue.main.async {
+        self.pendingDownloadResult?(destinationURL.path)
+        self.pendingDownloadResult = nil
+        self.downloadTask = nil
+      }
+    } catch {
+      updateDownloadStatus(
+        state: "failed",
+        receivedBytes: 0,
+        totalBytes: 0,
+        message: error.localizedDescription,
+        path: nil
+      )
+      DispatchQueue.main.async {
+        self.pendingDownloadResult?(FlutterError(code: "download_failed", message: error.localizedDescription, details: nil))
+        self.pendingDownloadResult = nil
+        self.downloadTask = nil
+      }
+    }
+  }
+
+  func urlSession(
+    _ session: URLSession,
+    task: URLSessionTask,
+    didCompleteWithError error: Error?
+  ) {
+    guard let error = error as NSError? else { return }
+    if error.code == NSURLErrorCancelled { return }
+    updateDownloadStatus(
+      state: "failed",
+      receivedBytes: 0,
+      totalBytes: 0,
+      message: "模型下载失败，请检查网络后重试。",
+      path: nil
+    )
+    DispatchQueue.main.async {
+      self.pendingDownloadResult?(FlutterError(code: "download_failed", message: "模型下载失败，请检查网络后重试。", details: nil))
+      self.pendingDownloadResult = nil
+      self.downloadTask = nil
+    }
   }
 }
