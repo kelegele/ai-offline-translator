@@ -8,7 +8,7 @@
 - `docs/llama_pr22836_notes.md`：`llama.cpp` PR #22836 与 `STQ1_0` 加载说明。
 - `docs/flutter_mobile_architecture.md`：计划中的 Flutter UI 与原生推理层架构。
 
-后续实现目录应遵循架构文档：`flutter_app/` 存放 Flutter 代码，`third_party/llama.cpp/` 存放固定版本的原生推理依赖，`scripts/` 存放可重复执行的安装与构建脚本。
+后续实现目录应遵循架构文档：`flutter_app/` 存放 Flutter 代码，`third_party/llama.cpp/` 存放固定版本的原生推理依赖，`scripts/` 存放可重复执行的安装与构建脚本。`third_party/llama.cpp/` 是 Git submodule，固定到 `llama.cpp` `PR #22836` 对应 commit。
 
 ## 构建、测试与开发命令
 
@@ -22,6 +22,12 @@
 - `cd flutter_app && flutter run`：在已连接设备或模拟器上启动应用。
 
 如后续引入 Python，所有 Python 操作必须通过 `uv` 执行，例如 `uv run`、`uv add` 或 `uv sync`。
+
+第三方依赖使用 Git submodule 管理：
+
+- `git submodule update --init third_party/llama.cpp`：初始化 `llama.cpp` submodule。
+- `git submodule status`：确认当前 submodule 指针。
+- 不要把 `third_party/llama.cpp/` 改回临时 clone；如需更新 PR 指针，应更新 submodule commit 并同步修改 README / setup 脚本中的校验 commit。
 
 ### llama.cpp 安全执行规则
 

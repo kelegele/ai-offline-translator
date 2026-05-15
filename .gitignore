@@ -17,7 +17,6 @@ models/*.apk
 models/AngelSlim/
 
 # Third-party build outputs
-third_party/llama.cpp/
 third_party/llama.cpp/build*/
 third_party/llama.cpp/.cache/
 

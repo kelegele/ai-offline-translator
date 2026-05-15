@@ -1,7 +1,5 @@
 param(
-    [string]$ModelScopeModel = "AngelSlim/Hy-MT1.5-1.8B-1.25bit-GGUF",
-    [string]$LlamaRepo = "https://github.com/ggml-org/llama.cpp.git",
-    [string]$LlamaRef = "refs/pull/22836/head"
+    [string]$ModelScopeModel = "AngelSlim/Hy-MT1.5-1.8B-1.25bit-GGUF"
 )
 
 $ErrorActionPreference = "Stop"
@@ -9,8 +7,8 @@ $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 $ModelsDir = Join-Path $RepoRoot "models"
 $ModelDir = Join-Path $ModelsDir "AngelSlim/Hy-MT1.5-1.8B-1.25bit-GGUF"
-$ThirdPartyDir = Join-Path $RepoRoot "third_party"
-$LlamaDir = Join-Path $ThirdPartyDir "llama.cpp"
+$LlamaDir = Join-Path $RepoRoot "third_party\llama.cpp"
+$LlamaPr22836Commit = "7ef6976b218cfce6158165f4c63a094acb70e707"
 
 function Ensure-Command($Name, $InstallHint) {
     if (-not (Get-Command $Name -ErrorAction SilentlyContinue)) {
@@ -26,7 +24,7 @@ function Invoke-Native($Description, $FilePath, [string[]]$Arguments) {
     }
 }
 
-New-Item -ItemType Directory -Force $ModelDir, $ThirdPartyDir | Out-Null
+New-Item -ItemType Directory -Force $ModelDir | Out-Null
 
 Ensure-Command "git" "Install Git and rerun this script."
 Ensure-Command "uv" "Install uv first: https://docs.astral.sh/uv/"
@@ -35,14 +33,19 @@ if (-not (Get-Command "modelscope" -ErrorAction SilentlyContinue)) {
     Invoke-Native "Installing modelscope CLI with uv tool install..." "uv" @("tool", "install", "modelscope")
 }
 
-if (-not (Test-Path $LlamaDir)) {
-    New-Item -ItemType Directory -Force $LlamaDir | Out-Null
-    Invoke-Native "Initializing llama.cpp repo in third_party/llama.cpp..." "git" @("-C", $LlamaDir, "init")
-    Invoke-Native "Adding llama.cpp origin remote..." "git" @("-C", $LlamaDir, "remote", "add", "origin", $LlamaRepo)
+if (-not (Test-Path (Join-Path $RepoRoot ".gitmodules"))) {
+    throw "Missing .gitmodules. Run setup from the repository root checkout."
 }
 
-Invoke-Native "Fetching llama.cpp PR #22836..." "git" @("-C", $LlamaDir, "fetch", "--depth", "1", "origin", $LlamaRef)
-Invoke-Native "Checking out llama.cpp PR #22836..." "git" @("-C", $LlamaDir, "checkout", "-B", "pr-22836", "FETCH_HEAD")
+Invoke-Native "Initializing llama.cpp submodule..." "git" @("-C", $RepoRoot, "submodule", "update", "--init", "third_party/llama.cpp")
+
+$CurrentLlamaCommit = (& git -C $LlamaDir rev-parse HEAD).Trim()
+if ($LASTEXITCODE -ne 0) {
+    throw "Failed to read llama.cpp submodule commit."
+}
+if ($CurrentLlamaCommit -ne $LlamaPr22836Commit) {
+    throw "Unexpected llama.cpp commit: $CurrentLlamaCommit. Expected PR #22836 commit: $LlamaPr22836Commit"
+}
 
 Invoke-Native "Downloading model into model-specific directory..." "modelscope" @("download", "--model", $ModelScopeModel, "--local_dir", $ModelDir)
 

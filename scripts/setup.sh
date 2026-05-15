@@ -2,14 +2,12 @@
 set -euo pipefail
 
 MODEL_SCOPE_MODEL="${MODEL_SCOPE_MODEL:-AngelSlim/Hy-MT1.5-1.8B-1.25bit-GGUF}"
-LLAMA_REPO="${LLAMA_REPO:-https://github.com/ggml-org/llama.cpp.git}"
-LLAMA_REF="${LLAMA_REF:-refs/pull/22836/head}"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MODELS_DIR="$REPO_ROOT/models"
 MODEL_DIR="$MODELS_DIR/AngelSlim/Hy-MT1.5-1.8B-1.25bit-GGUF"
-THIRD_PARTY_DIR="$REPO_ROOT/third_party"
-LLAMA_DIR="$THIRD_PARTY_DIR/llama.cpp"
+LLAMA_DIR="$REPO_ROOT/third_party/llama.cpp"
+LLAMA_PR_22836_COMMIT="7ef6976b218cfce6158165f4c63a094acb70e707"
 
 need_cmd() {
   command -v "$1" >/dev/null 2>&1 || {
@@ -18,7 +16,7 @@ need_cmd() {
   }
 }
 
-mkdir -p "$MODEL_DIR" "$THIRD_PARTY_DIR"
+mkdir -p "$MODEL_DIR"
 
 need_cmd git "Install Git and rerun."
 need_cmd uv "Install uv first: https://docs.astral.sh/uv/"
@@ -28,16 +26,20 @@ if ! command -v modelscope >/dev/null 2>&1; then
   uv tool install modelscope
 fi
 
-if [[ ! -d "$LLAMA_DIR/.git" ]]; then
-  echo "Initializing llama.cpp repo in third_party/llama.cpp..."
-  mkdir -p "$LLAMA_DIR"
-  git -C "$LLAMA_DIR" init
-  git -C "$LLAMA_DIR" remote add origin "$LLAMA_REPO"
+if [[ ! -f "$REPO_ROOT/.gitmodules" ]]; then
+  echo "Missing .gitmodules. Run setup from the repository root checkout." >&2
+  exit 1
 fi
 
-echo "Fetching llama.cpp PR #22836..."
-git -C "$LLAMA_DIR" fetch --depth 1 origin "$LLAMA_REF"
-git -C "$LLAMA_DIR" checkout -B pr-22836 FETCH_HEAD
+echo "Initializing llama.cpp submodule..."
+git -C "$REPO_ROOT" submodule update --init third_party/llama.cpp
+
+current_llama_commit="$(git -C "$LLAMA_DIR" rev-parse HEAD)"
+if [[ "$current_llama_commit" != "$LLAMA_PR_22836_COMMIT" ]]; then
+  echo "Unexpected llama.cpp commit: $current_llama_commit" >&2
+  echo "Expected PR #22836 commit: $LLAMA_PR_22836_COMMIT" >&2
+  exit 1
+fi
 
 echo "Downloading model into model-specific directory..."
 modelscope download --model "$MODEL_SCOPE_MODEL" --local_dir "$MODEL_DIR"

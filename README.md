@@ -32,15 +32,21 @@ macOS / Linux:
 
 - 使用 `uv tool install modelscope` 安装 `modelscope` CLI（如本机未安装）
 - 使用 `modelscope download --model AngelSlim/Hy-MT1.5-1.8B-1.25bit-GGUF --local_dir models/AngelSlim/Hy-MT1.5-1.8B-1.25bit-GGUF` 下载模型
-- 克隆 `https://github.com/ggml-org/llama.cpp.git` 到 `third_party/llama.cpp/`
-- 拉取并 checkout `https://github.com/ggml-org/llama.cpp/pull/22836`
+- 初始化 Git submodule `third_party/llama.cpp/`
+- 校验 `third_party/llama.cpp/` 固定在 `PR #22836` 对应 commit：`7ef6976b218cfce6158165f4c63a094acb70e707`
+
+如果不运行 setup 脚本，也可以单独初始化第三方依赖：
+
+```bash
+git submodule update --init third_party/llama.cpp
+```
 
 ## 本地目录约定
 
 ```text
 ai-offline-translator/
 ├─ models/                  # 本地模型缓存，不提交大文件
-├─ third_party/llama.cpp/    # llama.cpp PR #22836 工作树
+├─ third_party/llama.cpp/    # llama.cpp submodule，固定到 PR #22836 commit
 ├─ scripts/                  # 初始化、下载和构建脚本
 └─ docs/                     # 项目文档
 ```
