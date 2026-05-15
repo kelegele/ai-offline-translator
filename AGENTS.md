@@ -147,8 +147,26 @@ flutter build macos --release
 mkdir -p /tmp/dmg-temp
 cp -R flutter_app/build/macos/Build/Products/Release/ai_offline_translator.app /tmp/dmg-temp/
 ln -sf /Applications /tmp/dmg-temp/Applications
-hdiutil create -volname "AI离线翻译" -srcfolder /tmp/dmg-temp -ov -format UDZO AI离线翻译-v<版本号>-macos.dmg
+hdiutil create -volname "AI-Offline-Translator" -srcfolder /tmp/dmg-temp -ov -format UDZO AI-Offline-Translator-v<版本号>-macos.dmg
 rm -rf /tmp/dmg-temp
+```
+
+### 创建 GitHub Release
+
+### Release 文件命名规范
+
+**必须使用英文文件名**，GitHub Release 会吞掉中文字符。统一格式：
+
+```text
+AI-Offline-Translator-v<版本号>-android-arm64.apk
+AI-Offline-Translator-v<版本号>-macos.dmg
+```
+
+示例：
+
+```text
+AI-Offline-Translator-v0.0.3-android-arm64.apk
+AI-Offline-Translator-v0.0.3-macos.dmg
 ```
 
 ### 创建 GitHub Release
@@ -160,8 +178,8 @@ git push origin v<版本号>
 
 # 创建 Release 并上传安装包
 gh release create v<版本号> \
-  "AI离线翻译-v<版本号>-android-arm64.apk" \
-  "AI离线翻译-v<版本号>-macos.dmg" \
+  "AI-Offline-Translator-v<版本号>-android-arm64.apk" \
+  "AI-Offline-Translator-v<版本号>-macos.dmg" \
   --title "v<版本号> - 标题" \
   --notes "更新内容说明"
 ```
