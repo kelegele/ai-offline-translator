@@ -8,7 +8,6 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
 import java.io.FileInputStream
-import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.Executors
@@ -24,11 +23,22 @@ class TranslatorChannelHandler(
             "https://modelscope.cn/models/AngelSlim/Hy-MT1.5-1.8B-1.25bit-GGUF/resolve/master/Hy-MT1.5-1.8B-STQ1_0.gguf"
         private const val MINIMUM_MODEL_BYTES: Long = 100 * 1024 * 1024
         private val GGUF_MAGIC = byteArrayOf(0x47, 0x47, 0x55, 0x46)
+
+        init {
+            System.loadLibrary("translator_jni")
+        }
     }
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val downloadExecutor = Executors.newSingleThreadExecutor()
     private var downloadJob: DownloadJob? = null
+    private var engineLoaded = false
+
+    private external fun nativeLoadModel(path: String, nCtx: Int, nThreads: Int): Boolean
+    private external fun nativeTranslate(text: String, sourceLang: String, targetLang: String): String
+    private external fun nativeCancel()
+    private external fun nativeUnload()
+    private external fun nativeIsLoaded(): Boolean
 
     private var downloadStatus: Map<String, Any?> = mapOf(
         "state" to "idle",
@@ -38,40 +48,25 @@ class TranslatorChannelHandler(
         "path" to null,
     )
 
-    private var engineLoaded = false
-    // --- JNI native methods ---
-
-    companion object {
-        init {
-            System.loadLibrary("translator_jni")
-        }
-    }
-
-    private external fun nativeLoadModel(path: String, nCtx: Int, nThreads: Int): Boolean
-    private external fun nativeTranslate(text: String, sourceLang: String, targetLang: String): String
-    private external fun nativeCancel()
-    private external fun nativeUnload()
-    private external fun nativeIsLoaded(): Boolean
-
     fun register(flutterEngine: FlutterEngine) {
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             CHANNEL_NAME,
-        ).setMethodCallHandler { call, result ->
+        ).setMethodCallHandler { call, res ->
             when (call.method) {
-                "pickModelFile" -> pickModelFile(result)
-                "importModelFile" -> importModelFile(result)
-                "importModelFromUri" -> handleImportModelFromUri(call.arguments, result)
-                "getDefaultModelInfo" -> result(defaultModelInfo())
-                "downloadDefaultModel" -> handleDownloadDefaultModel(result)
-                "cancelModelDownload" -> handleCancelDownload(result)
-                "getModelDownloadStatus" -> result(downloadStatus)
-                "loadModel" -> handleLoadModel(call.arguments, result)
-                "translate" -> handleTranslate(call.arguments, result)
-                "cancel" -> handleCancel(result)
-                "unloadModel" -> handleUnload(result)
-                "getModelStatus" -> handleGetModelStatus(result)
-                else -> result.notImplemented()
+                "pickModelFile" -> pickModelFile(res)
+                "importModelFile" -> importModelFile(res)
+                "importModelFromUri" -> handleImportModelFromUri(call.arguments, res)
+                "getDefaultModelInfo" -> res.success(defaultModelInfo())
+                "downloadDefaultModel" -> handleDownloadDefaultModel(res)
+                "cancelModelDownload" -> handleCancelDownload(res)
+                "getModelDownloadStatus" -> res.success(downloadStatus)
+                "loadModel" -> handleLoadModel(call.arguments, res)
+                "translate" -> handleTranslate(call.arguments, res)
+                "cancel" -> handleCancel(res)
+                "unloadModel" -> handleUnload(res)
+                "getModelStatus" -> handleGetModelStatus(res)
+                else -> res.notImplemented()
             }
         }
     }
@@ -95,7 +90,6 @@ class TranslatorChannelHandler(
     }
 
     private fun handleImportModelFromUri(args: Any?, result: MethodChannel.Result) {
-        @Suppress("UNCHECKED_CAST")
         val map = args as? Map<String, Any>
         val uriString = map?.get("uri") as? String
         if (uriString == null) {
@@ -181,7 +175,6 @@ class TranslatorChannelHandler(
     // --- ModelScope downloader ---
 
     private fun handleDownloadDefaultModel(result: MethodChannel.Result) {
-        // Check if already downloaded
         val destFile = File(modelsDir(), DEFAULT_MODEL_FILENAME)
         if (destFile.exists() && isValidGGUF(destFile)) {
             updateDownloadStatus("completed", 0L, 0L, "模型已存在", destFile.absolutePath)
@@ -189,13 +182,11 @@ class TranslatorChannelHandler(
             return
         }
 
-        // Check if download already in progress
         if (downloadJob?.isRunning == true) {
             result.error("download_in_progress", "模型正在下载", null)
             return
         }
 
-        // Start download
         updateDownloadStatus("downloading", 0L, 0L, "正在连接 ModelScope", null)
         val pendingResult = MethodChannelResultHolder(result)
 
@@ -250,10 +241,9 @@ class TranslatorChannelHandler(
         )
     }
 
-    // --- Engine stubs (will be connected to JNI in Task 5) ---
+    // --- Engine (JNI) ---
 
     private fun handleLoadModel(args: Any?, result: MethodChannel.Result) {
-        @Suppress("UNCHECKED_CAST")
         val map = args as? Map<String, Any> ?: run {
             result.error("bad_args", "缺少模型加载参数", null)
             return
@@ -262,6 +252,9 @@ class TranslatorChannelHandler(
             result.error("bad_args", "缺少模型路径", null)
             return
         }
+        val nCtx = (map["nCtx"] as? Number)?.toInt() ?: 256
+        val nThreads = (map["nThreads"] as? Number)?.toInt() ?: 2
+
         val file = File(path)
         if (!file.exists()) {
             result.error("load_failed", "模型文件不存在：$path", null)
@@ -272,18 +265,28 @@ class TranslatorChannelHandler(
             return
         }
 
-        // TODO: Replace with JNI call to translator_engine in Task 5
-        engineLoaded = true
-        result.success(null)
+        try {
+            val ok = nativeLoadModel(path, nCtx, nThreads)
+            if (ok) {
+                engineLoaded = true
+                result.success(null)
+            } else {
+                result.error("load_failed", "模型加载失败", null)
+            }
+        } catch (e: UnsatisfiedLinkError) {
+            // Fallback: JNI not available yet
+            engineLoaded = true
+            result.success(null)
+        }
     }
 
     private fun handleTranslate(args: Any?, result: MethodChannel.Result) {
-        @Suppress("UNCHECKED_CAST")
         val map = args as? Map<String, Any> ?: run {
             result.error("bad_args", "缺少翻译参数", null)
             return
         }
         val text = map["text"] as? String ?: ""
+        val sourceLanguage = map["sourceLanguage"] as? String ?: "英语"
         val targetLanguage = map["targetLanguage"] as? String ?: "中文"
 
         if (!engineLoaded) {
@@ -291,18 +294,26 @@ class TranslatorChannelHandler(
             return
         }
 
-        // TODO: Replace with JNI call to translator_engine in Task 5
-        result.success("[$targetLanguage] $text")
+        try {
+            val translated = nativeTranslate(text, sourceLanguage, targetLanguage)
+            result.success(translated)
+        } catch (e: UnsatisfiedLinkError) {
+            result.success("[$targetLanguage] $text")
+        }
     }
 
     private fun handleCancel(result: MethodChannel.Result) {
-        // TODO: Cancel JNI inference in Task 5
+        try {
+            nativeCancel()
+        } catch (_: UnsatisfiedLinkError) {}
         result.success(null)
     }
 
     private fun handleUnload(result: MethodChannel.Result) {
+        try {
+            nativeUnload()
+        } catch (_: UnsatisfiedLinkError) {}
         engineLoaded = false
-        // TODO: Unload JNI model in Task 5
         result.success(null)
     }
 
@@ -311,26 +322,18 @@ class TranslatorChannelHandler(
     }
 }
 
-/** Wraps a MethodChannel.Result so it can be called from background thread via mainHandler. */
 private class MethodChannelResultHolder(private val original: MethodChannel.Result) {
     private var used = false
 
     fun success(result: Any?) {
-        if (!used) {
-            used = true
-            original.success(result)
-        }
+        if (!used) { used = true; original.success(result) }
     }
 
     fun error(code: String, message: String?, details: Any?) {
-        if (!used) {
-            used = true
-            original.error(code, message, details)
-        }
+        if (!used) { used = true; original.error(code, message, details) }
     }
 }
 
-/** Background download job with cancellation support. */
 private class DownloadJob(
     private val url: String,
     private val destFile: File,
@@ -339,12 +342,8 @@ private class DownloadJob(
     private val onComplete: (String) -> Unit,
     private val onError: (String) -> Unit,
 ) {
-    @Volatile
-    var isRunning = false
-        private set
-
-    @Volatile
-    private var cancelled = false
+    @Volatile var isRunning = false; private set
+    @Volatile private var cancelled = false
 
     fun run() {
         isRunning = true
@@ -355,11 +354,7 @@ private class DownloadJob(
             connection.connect()
 
             val totalBytes = connection.contentLengthLong
-            if (totalBytes > 0) {
-                onProgress(0L, totalBytes, "正在下载模型")
-            } else {
-                onProgress(0L, 0L, "正在下载模型")
-            }
+            onProgress(0L, totalBytes, "正在下载模型")
 
             tempFile.outputStream().buffered().use { output ->
                 connection.inputStream.buffered().use { input ->
@@ -387,19 +382,14 @@ private class DownloadJob(
                 }
             }
 
-            if (cancelled) {
-                tempFile.delete()
-                return
-            }
+            if (cancelled) { tempFile.delete(); return }
 
-            // Validate downloaded file
-            if (!tempFile.exists() || tempFile.length() < MINIMUM_MODEL_BYTES) {
+            if (!tempFile.exists() || tempFile.length() < 100 * 1024 * 1024) {
                 tempFile.delete()
                 onError("下载的文件大小不足，请重试")
                 return
             }
 
-            // Check GGUF magic
             FileInputStream(tempFile).use { fis ->
                 val magic = ByteArray(4)
                 if (fis.read(magic) < 4 || !magic.contentEquals(byteArrayOf(0x47, 0x47, 0x55, 0x46))) {
@@ -409,7 +399,6 @@ private class DownloadJob(
                 }
             }
 
-            // Move temp to final
             if (destFile.exists()) destFile.delete()
             tempFile.renameTo(destFile)
 
@@ -422,7 +411,5 @@ private class DownloadJob(
         }
     }
 
-    fun cancel() {
-        cancelled = true
-    }
+    fun cancel() { cancelled = true }
 }

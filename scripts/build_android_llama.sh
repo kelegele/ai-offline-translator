@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build llama.cpp static libraries for Android arm64-v8a
-# Requires ANDROID_NDK_HOME to be set
+# Only builds the required libs: llama, llama-common, ggml, ggml-cpu, ggml-base
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -35,15 +35,19 @@ cmake -S "$LLAMA_DIR" -B "$BUILD_DIR" \
   -DGGML_CUDA=OFF \
   -DGGML_BLAS=OFF \
   -DLLAMA_CURL=OFF \
-  -DBUILD_SHARED_LIBS=OFF
+  -DBUILD_SHARED_LIBS=OFF \
+  -DLLAMA_BUILD_TOOLS=OFF \
+  -DLLAMA_BUILD_EXAMPLES=OFF \
+  -DLLAMA_BUILD_TESTS=OFF \
+  -DLLAMA_BUILD_SERVER=OFF
 
-cmake --build "$BUILD_DIR" -j"$(sysctl -n hw.ncpu 2>/dev/null || nproc)"
+cmake --build "$BUILD_DIR" -j"$(sysctl -n hw.ncpu 2>/dev/null || nproc)" \
+  --target llama \
+  --target llama-common \
+  --target ggml \
+  --target ggml-cpu \
+  --target ggml-base
 
 echo ""
-echo "Build complete. Static libs at:"
-ls -la "$BUILD_DIR/src/libllama.a" 2>/dev/null || true
-ls -la "$BUILD_DIR/common/libllama-common.a" 2>/dev/null || true
-ls -la "$BUILD_DIR/common/libllama-common-base.a" 2>/dev/null || true
-ls -la "$BUILD_DIR/ggml/src/libggml.a" 2>/dev/null || true
-ls -la "$BUILD_DIR/ggml/src/libggml-cpu.a" 2>/dev/null || true
-ls -la "$BUILD_DIR/ggml/src/libggml-base.a" 2>/dev/null || true
+echo "Build complete. Static libs:"
+find "$BUILD_DIR" -name "*.a" -type f | sort
