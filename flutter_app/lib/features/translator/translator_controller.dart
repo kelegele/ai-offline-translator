@@ -2,6 +2,7 @@ import 'dart:io' show FileSystemException, Platform;
 
 import 'package:flutter/foundation.dart';
 
+import 'model_download_state.dart';
 import 'model_selection_state.dart';
 import 'translator_service.dart';
 import 'translator_state.dart';
@@ -58,6 +59,77 @@ class TranslatorController extends ChangeNotifier {
         displayName: trimmed.split(Platform.pathSeparator).last,
       ),
       clearError: true,
+    );
+    notifyListeners();
+  }
+
+  void beginModelDownload() {
+    _state = _state.copyWith(
+      runtimeStatus: '正在下载模型',
+      modelDownloadState: const ModelDownloadState(
+        status: ModelDownloadStatus.downloading,
+        message: '正在连接 ModelScope',
+      ),
+      clearError: true,
+    );
+    notifyListeners();
+  }
+
+  void updateModelDownloadProgress({
+    required int receivedBytes,
+    required int totalBytes,
+    required String message,
+  }) {
+    _state = _state.copyWith(
+      runtimeStatus: '正在下载模型',
+      modelDownloadState: ModelDownloadState(
+        status: ModelDownloadStatus.downloading,
+        receivedBytes: receivedBytes,
+        totalBytes: totalBytes,
+        message: message,
+      ),
+    );
+    notifyListeners();
+  }
+
+  void startModelDownload(String path) {
+    selectModel(path);
+    _state = _state.copyWith(
+      runtimeStatus: '模型已下载，等待加载',
+      modelDownloadState: ModelDownloadState(
+        status: ModelDownloadStatus.completed,
+        path: path,
+        message: '模型已下载',
+      ),
+      clearError: true,
+    );
+    notifyListeners();
+  }
+
+  void cancelModelDownload() {
+    _state = _state.copyWith(
+      runtimeStatus: '下载已取消',
+      modelDownloadState: const ModelDownloadState(
+        status: ModelDownloadStatus.cancelled,
+        message: '下载已取消。',
+      ),
+    );
+    notifyListeners();
+  }
+
+  void failModelDownload(String message) {
+    _state = _state.copyWith(
+      status: TranslatorStatus.error,
+      runtimeStatus: '模型下载失败',
+      modelDownloadState: ModelDownloadState(
+        status: ModelDownloadStatus.failed,
+        message: message,
+      ),
+      modelState: _state.modelState.copyWith(
+        status: ModelLifecycleStatus.failed,
+        errorMessage: message,
+      ),
+      errorMessage: message,
     );
     notifyListeners();
   }

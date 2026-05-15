@@ -17,6 +17,28 @@ class TranslatorChannel {
     return _channel.invokeMethod<String>('importModelFile');
   }
 
+  Future<Map<String, Object?>> getDefaultModelInfo() async {
+    final result = await _channel.invokeMapMethod<String, Object?>(
+      'getDefaultModelInfo',
+    );
+    return result ?? const {};
+  }
+
+  Future<String?> downloadDefaultModel() {
+    return _channel.invokeMethod<String>('downloadDefaultModel');
+  }
+
+  Future<void> cancelModelDownload() async {
+    await _channel.invokeMethod<void>('cancelModelDownload');
+  }
+
+  Future<Map<String, Object?>> getModelDownloadStatus() async {
+    final result = await _channel.invokeMapMethod<String, Object?>(
+      'getModelDownloadStatus',
+    );
+    return result ?? const {};
+  }
+
   Future<void> loadModel({
     required String path,
     required int nCtx,

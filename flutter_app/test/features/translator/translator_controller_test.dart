@@ -225,4 +225,32 @@ void main() {
     expect(controller.state.status, TranslatorStatus.error);
     expect(controller.state.errorMessage, '请先加载模型。');
   });
+
+  test('download default model selects returned path', () {
+    final controller = TranslatorController(
+      service: RecordingTranslatorService(),
+    );
+
+    controller.startModelDownload('/tmp/Hy-MT1.5-1.8B-STQ1_0.gguf');
+
+    expect(
+      controller.state.modelState.selectedPath,
+      '/tmp/Hy-MT1.5-1.8B-STQ1_0.gguf',
+    );
+    expect(controller.state.runtimeStatus, '模型已下载，等待加载');
+  });
+
+  test('download failure surfaces model error', () {
+    final controller = TranslatorController(
+      service: RecordingTranslatorService(),
+    );
+
+    controller.failModelDownload('模型下载失败，请检查网络后重试。');
+
+    expect(controller.state.status, TranslatorStatus.error);
+    expect(
+      controller.state.modelState.errorMessage,
+      '模型下载失败，请检查网络后重试。',
+    );
+  });
 }
