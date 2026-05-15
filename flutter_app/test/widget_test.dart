@@ -10,5 +10,7 @@ void main() {
     expect(find.text('下载模型'), findsOneWidget);
     expect(find.text('当前模型'), findsOneWidget);
     expect(find.text('未选择模型'), findsOneWidget);
+    expect(find.text('GGUF 路径'), findsNothing);
+    expect(find.textContaining('手动填写'), findsNothing);
   });
 }

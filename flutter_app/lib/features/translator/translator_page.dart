@@ -311,7 +311,7 @@ class _ModelPanel extends StatelessWidget {
     final modelName = state.modelState.displayName ?? '未选择模型';
     final modelHint = state.modelState.displayName == null
         ? '请导入本地 GGUF，或从 ModelScope 下载默认模型'
-        : '模型路径已保存到 App 内部状态，不在界面展示';
+        : '模型已保存到 App 私有目录';
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.xl),

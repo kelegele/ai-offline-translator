@@ -48,12 +48,12 @@ The `STQ1_0` file is the only model that has been validated with the current `ll
 ## User Flow
 
 1. User opens the macOS app.
-2. Model panel shows manual path entry, `导入模型`, and `下载模型`.
+2. Model panel shows read-only selected model name, `导入模型`, and `下载模型`.
 3. If the default model already exists in Application Support and passes the GGUF magic check, clicking `下载模型` should select the existing file without downloading again.
 4. If the model is missing, clicking `下载模型` starts a ModelScope download.
 5. The model panel shows progress as bytes or MB, plus `取消下载`.
 6. On cancellation, the temporary partial file is removed and the current model selection is unchanged.
-7. On success, the downloaded GGUF is moved into Application Support and selected in the path field.
+7. On success, the downloaded GGUF is moved into Application Support and selected internally; the UI only displays the model filename.
 8. User clicks `加载模型`.
 9. Existing native engine loads the file and translation proceeds.
 

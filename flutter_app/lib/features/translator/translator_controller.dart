@@ -142,9 +142,9 @@ class TranslatorController extends ChangeNotifier {
         runtimeStatus: '未选择模型',
         modelState: _state.modelState.copyWith(
           status: ModelLifecycleStatus.failed,
-          errorMessage: '请先填写 GGUF 模型路径。',
+          errorMessage: '请先导入或下载 GGUF 模型。',
         ),
-        errorMessage: '请先填写 GGUF 模型路径。',
+        errorMessage: '请先导入或下载 GGUF 模型。',
       );
       notifyListeners();
       return;

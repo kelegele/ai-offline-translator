@@ -65,7 +65,8 @@ Flutter app 骨架位于 `flutter_app/`。
 
 - 已生成 Android、iOS、macOS 工程目录
 - 首轮验证目标为 macOS
-- translator feature 已支持通过 macOS 文件选择器导入 GGUF 到 App 私有目录，也保留手动填写路径
+- translator feature 已支持通过 macOS 文件选择器导入 GGUF 到 App 私有目录，也支持从 ModelScope 下载默认模型
+- 模型选择不支持手填路径；界面只显示模型名称，真实路径仅保存在 App 内部状态
 - macOS 当前通过 `MethodChannel` 调用原生 `TranslatorBridge` / `TranslatorEngine`，直接链接 `llama.cpp` 与 `llama-common`
 - 原生引擎使用 `llama.cpp/common` 的 jinja chat template、tokenize、sampler 能力，避免手写 prompt token 序列导致乱码
 - 非 macOS 平台当前仍保留确定性的 mock service，后续再接原生推理层
@@ -88,19 +89,13 @@ cd flutter_app
 /Users/fh/Projects/Flutter/flutter/bin/flutter run -d macos
 ```
 
-启动后点击“导入模型”，App 会把 GGUF 复制到私有目录：
+启动后可点击“导入模型”选择本地 GGUF，或点击“下载模型”从 ModelScope 获取默认模型。App 会把模型保存到私有目录：
 
 ```text
 ~/Library/Application Support/ai_offline_translator/models/
 ```
 
-也可以继续在“GGUF 路径”中手动填写模型路径，例如：
-
-```text
-../models/AngelSlim/Hy-MT1.5-1.8B-1.25bit-GGUF/Hy-MT1.5-1.8B-STQ1_0.gguf
-```
-
-再点击“加载模型”和“翻译”。当前实现优先安全验证，不启用 Metal offload。
+界面只显示模型文件名，不显示完整路径，也不提供可编辑路径输入框。选择或下载完成后，再点击“加载模型”和“翻译”。当前实现优先安全验证，不启用 Metal offload。
 
 ## 建议路线
 

@@ -226,6 +226,20 @@ void main() {
     expect(controller.state.errorMessage, '请先加载模型。');
   });
 
+  test(
+    'loadModel asks user to import or download when no model is selected',
+    () async {
+      final controller = TranslatorController(
+        service: RecordingTranslatorService(),
+      );
+
+      await controller.loadSelectedModel();
+
+      expect(controller.state.status, TranslatorStatus.error);
+      expect(controller.state.errorMessage, '请先导入或下载 GGUF 模型。');
+    },
+  );
+
   test('download default model selects returned path', () {
     final controller = TranslatorController(
       service: RecordingTranslatorService(),
@@ -248,9 +262,6 @@ void main() {
     controller.failModelDownload('模型下载失败，请检查网络后重试。');
 
     expect(controller.state.status, TranslatorStatus.error);
-    expect(
-      controller.state.modelState.errorMessage,
-      '模型下载失败，请检查网络后重试。',
-    );
+    expect(controller.state.modelState.errorMessage, '模型下载失败，请检查网络后重试。');
   });
 }
