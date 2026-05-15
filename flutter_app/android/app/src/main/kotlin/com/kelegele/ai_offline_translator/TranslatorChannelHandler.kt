@@ -39,6 +39,19 @@ class TranslatorChannelHandler(
     )
 
     private var engineLoaded = false
+    // --- JNI native methods ---
+
+    companion object {
+        init {
+            System.loadLibrary("translator_jni")
+        }
+    }
+
+    private external fun nativeLoadModel(path: String, nCtx: Int, nThreads: Int): Boolean
+    private external fun nativeTranslate(text: String, sourceLang: String, targetLang: String): String
+    private external fun nativeCancel()
+    private external fun nativeUnload()
+    private external fun nativeIsLoaded(): Boolean
 
     fun register(flutterEngine: FlutterEngine) {
         MethodChannel(
