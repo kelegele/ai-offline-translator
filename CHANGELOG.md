@@ -4,6 +4,18 @@
 
 ### Added
 
+- 新增 Android 端完整功能层：TranslatorService 工厂分发、MethodChannelHandler、ModelScope 下载器和 JNI 翻译桥接骨架。
+- 新增 `file_picker` 依赖，支持 Android 文件选择器导入 GGUF 模型到 App 私有目录。
+- 抽取 `translator_engine` C++ 到 `flutter_app/native/translator_engine/`，macOS 通过符号链接引用，Android 通过 JNI + CMake 引用。
+- 新增 `scripts/build_android_llama.sh`，用于构建 Android arm64-v8a 的 llama.cpp 静态库。
+- Android 构建配置仅支持 `arm64-v8a` ABI，对齐官方 demo。
+
+### Changed
+
+- 将 Flutter App 版本更新为 `0.0.3+3`。
+
+### Added
+
 - 新增 `docs/PRD.md`，记录模型导入、模型下载、不可手填路径和跨端一致性要求。
 
 ## v0.0.2 - 2026-05-16

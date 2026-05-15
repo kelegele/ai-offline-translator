@@ -65,7 +65,7 @@ class _TranslatorPageState extends State<TranslatorPage> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       builder: (sheetContext) => _ModelSheet(
-        state: _controller.state,
+        controller: _controller,
         onImport: () => _importModelFromSheet(sheetContext),
         onDownload: () {
           Navigator.pop(sheetContext);
@@ -170,8 +170,10 @@ class _TranslatorPageState extends State<TranslatorPage> {
       animation: _controller,
       builder: (context, _) {
         final state = _controller.state; // used in builder
-        final isMobile = _isMobile;
-        final hPadding = isMobile ? AppSpacing.md : 48.0;
+        final screenWidth = MediaQuery.of(context).size.width;
+        final hPadding = screenWidth < 480
+            ? AppSpacing.sm
+            : (screenWidth < 720 ? AppSpacing.lg : 48.0);
 
         return Scaffold(
           backgroundColor: AppColors.canvas,
@@ -179,96 +181,82 @@ class _TranslatorPageState extends State<TranslatorPage> {
             child: Column(
               children: [
                 _buildNavBar(state),
+                // Language bar + action buttons (intrinsic height)
+                Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    hPadding,
+                    AppSpacing.md,
+                    hPadding,
+                    0,
+                  ),
+                  child: Column(
+                    children: [
+                      _LangBar(
+                        sourceLanguage: state.sourceLanguage,
+                        targetLanguage: state.targetLanguage,
+                        onSourceChanged:
+                            _controller.updateSourceLanguage,
+                        onTargetChanged:
+                            _controller.updateTargetLanguage,
+                        onSwap: () {
+                          _controller.updateSourceLanguage(
+                            state.targetLanguage,
+                          );
+                          _controller.updateTargetLanguage(
+                            state.sourceLanguage,
+                          );
+                        },
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                    ],
+                  ),
+                ),
+                // Input & Output panels — 1:1 equal height, translate button between them
                 Expanded(
-                  child: CustomScrollView(
-                    slivers: [
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: EdgeInsets.fromLTRB(
-                            hPadding,
-                            AppSpacing.md,
-                            hPadding,
-                            0,
-                          ),
-                          child: Column(
-                            children: [
-                              _LangBar(
-                                sourceLanguage: state.sourceLanguage,
-                                targetLanguage: state.targetLanguage,
-                                onSourceChanged:
-                                    _controller.updateSourceLanguage,
-                                onTargetChanged:
-                                    _controller.updateTargetLanguage,
-                                onSwap: () {
-                                  _controller.updateSourceLanguage(
-                                    state.targetLanguage,
-                                  );
-                                  _controller.updateTargetLanguage(
-                                    state.sourceLanguage,
-                                  );
-                                },
-                              ),
-                              const SizedBox(height: AppSpacing.md),
-                              _InputPanel(
-                                controller: _textController,
-                                characterCount: _characterCount,
-                                onChanged: _controller.updateInput,
-                              ),
-                              const SizedBox(height: AppSpacing.sm),
-                              Row(
-                                children: [
-                                  FilledButton(
-                                    onPressed:
-                                        state.status ==
-                                                TranslatorStatus.translating ||
-                                            !state.canTranslate
-                                        ? null
-                                        : () => _controller.translate(
-                                            _textController.text,
-                                          ),
-                                    child: const Text('翻译'),
-                                  ),
-                                  const SizedBox(width: AppSpacing.sm),
-                                  OutlinedButton(
-                                    onPressed:
-                                        state.status ==
-                                            TranslatorStatus.translating
-                                        ? _controller.cancel
-                                        : null,
-                                    child: const Text('取消'),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: AppSpacing.sm),
-                            ],
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: hPadding),
+                    child: Column(
+                      children: [
+                        Expanded(
+                          flex: 1,
+                          child: _InputPanel(
+                            controller: _textController,
+                            characterCount: _characterCount,
+                            onChanged: _controller.updateInput,
                           ),
                         ),
-                      ),
-                      SliverFillRemaining(
-                        hasScrollBody: true,
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(horizontal: hPadding),
-                          child: _OutputPanel(state: state),
-                        ),
-                      ),
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: EdgeInsets.only(
-                            top: AppSpacing.sm,
-                            bottom:
-                                AppSpacing.md +
-                                MediaQuery.of(context).padding.bottom,
-                          ),
-                          child: Center(
-                            child: Text(
-                              '结果由 AI 生成，仅供参考',
-                              style: Theme.of(context).textTheme.labelSmall
-                                  ?.copyWith(color: AppColors.muted),
+                        const SizedBox(height: AppSpacing.sm),
+                        SizedBox(
+                          width: double.infinity,
+                          child: _TranslateButton(state: state,
+                            onTranslate: () => _controller.translate(
+                              _textController.text,
                             ),
                           ),
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: AppSpacing.sm),
+                        Expanded(
+                          flex: 1,
+                          child: _OutputPanel(state: state),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                // Disclaimer
+                Padding(
+                  padding: EdgeInsets.only(
+                    top: AppSpacing.sm,
+                    bottom:
+                        AppSpacing.md +
+                        MediaQuery.of(context).padding.bottom,
+                  ),
+                  child: Center(
+                    child: Text(
+                      '结果由 AI 生成，仅供参考',
+                      style: Theme.of(context).textTheme.labelSmall
+                          ?.copyWith(color: AppColors.muted),
+                    ),
                   ),
                 ),
               ],
@@ -352,6 +340,58 @@ class _TranslatorPageState extends State<TranslatorPage> {
           ),
         ],
       ),
+    );
+  }
+}
+
+// --- Translate button ---
+
+class _TranslateButton extends StatelessWidget {
+  const _TranslateButton({required this.state, required this.onTranslate});
+  final TranslatorState state;
+  final VoidCallback onTranslate;
+
+  @override
+  Widget build(BuildContext context) {
+    final isTranslating = state.status == TranslatorStatus.translating;
+    final isDisabled = !isTranslating && !state.canTranslate;
+
+    if (isTranslating) {
+      // Keep dark active look but block taps via AbsorbPointer
+      return AbsorbPointer(
+        child: FilledButton(
+          style: FilledButton.styleFrom(
+            backgroundColor: AppColors.primary,
+            foregroundColor: AppColors.onPrimary,
+          ),
+          onPressed: () {}, // non-null so active style applies
+          child: const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  color: AppColors.onPrimary,
+                ),
+              ),
+              SizedBox(width: 8),
+              Text('翻译中'),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return FilledButton(
+      style: FilledButton.styleFrom(
+        disabledBackgroundColor: const Color(0xFFE5E7EB),
+        disabledForegroundColor: const Color(0xFFA8AAB2),
+      ),
+      onPressed: isDisabled ? null : onTranslate,
+      child: const Text('翻译'),
     );
   }
 }
@@ -529,6 +569,7 @@ class _InputPanelState extends State<_InputPanel> {
     final hasText = widget.controller.text.isNotEmpty;
 
     return Container(
+      constraints: const BoxConstraints.expand(),
       decoration: BoxDecoration(
         color: AppColors.canvas,
         borderRadius: BorderRadius.circular(AppRadius.lg),
@@ -542,10 +583,12 @@ class _InputPanelState extends State<_InputPanel> {
           TextField(
             controller: widget.controller,
             focusNode: _focusNode,
-            minLines: 5,
-            maxLines: 7,
+            expands: true,
+            minLines: null,
+            maxLines: null,
             textInputAction: TextInputAction.newline,
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(height: 1.6),
+            textAlignVertical: TextAlignVertical.top,
             decoration: const InputDecoration(
               hintText: '输入要翻译的内容',
               border: InputBorder.none,
@@ -553,22 +596,6 @@ class _InputPanelState extends State<_InputPanel> {
             ),
             onChanged: widget.onChanged,
           ),
-          // Clear button — top-right corner
-          if (hasText)
-            Positioned(
-              top: 8,
-              right: 6,
-              child: SizedBox(
-                height: 28,
-                width: 28,
-                child: IconButton(
-                  icon: const Icon(Icons.close, size: 18),
-                  color: AppColors.steel,
-                  padding: EdgeInsets.zero,
-                  onPressed: hasText ? () => widget.controller.clear() : null,
-                ),
-              ),
-            ),
           // Character count — bottom-right corner
           Positioned(
             bottom: 6,
@@ -580,6 +607,25 @@ class _InputPanelState extends State<_InputPanel> {
               ).textTheme.labelSmall?.copyWith(color: AppColors.muted),
             ),
           ),
+          // Clear button — top-right corner (after TextField in Stack for z-order)
+          if (hasText)
+            Positioned(
+              top: 8,
+              right: 6,
+              child: Material(
+                color: Colors.transparent,
+                child: SizedBox(
+                  height: 28,
+                  width: 28,
+                  child: IconButton(
+                    icon: const Icon(Icons.close, size: 18),
+                    color: AppColors.steel,
+                    padding: EdgeInsets.zero,
+                    onPressed: () => widget.controller.clear(),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -664,11 +710,12 @@ class _OutputPanel extends StatelessWidget {
   }
 }
 
+
 // --- Model bottom sheet ---
 
 class _ModelSheet extends StatefulWidget {
   const _ModelSheet({
-    required this.state,
+    required this.controller,
     required this.onImport,
     required this.onDownload,
     required this.onLoad,
@@ -676,7 +723,7 @@ class _ModelSheet extends StatefulWidget {
     required this.onCancelDownload,
   });
 
-  final TranslatorState state;
+  final TranslatorController controller;
   final VoidCallback onImport;
   final VoidCallback onDownload;
   final VoidCallback onLoad;
@@ -688,21 +735,40 @@ class _ModelSheet extends StatefulWidget {
 }
 
 class _ModelSheetState extends State<_ModelSheet> {
-  // Rebuild when controller state changes (e.g. import completes)
   @override
   void initState() {
     super.initState();
+    widget.controller.addListener(_onStateChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant _ModelSheet oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(_onStateChanged);
+      widget.controller.addListener(_onStateChanged);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_onStateChanged);
+    super.dispose();
+  }
+
+  void _onStateChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
-    // Use the latest state from a static notifier
-    final modelName = widget.state.modelState.displayName ?? '未选择模型';
-    final isLoaded = widget.state.modelState.isReady;
-    final hasSelection = widget.state.modelState.hasSelection;
-    final isDownloading = widget.state.modelDownloadState.isDownloading;
+    final state = widget.controller.state;
+    final modelName = state.modelState.displayName ?? '未选择模型';
+    final isLoaded = state.modelState.isReady;
+    final hasSelection = state.modelState.hasSelection;
+    final isDownloading = state.modelDownloadState.isDownloading;
     final isLoading =
-        widget.state.modelState.status == ModelLifecycleStatus.loading;
+        state.modelState.status == ModelLifecycleStatus.loading;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
@@ -755,10 +821,10 @@ class _ModelSheetState extends State<_ModelSheet> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  widget.state.modelState.errorMessage ??
+                  state.modelState.errorMessage ??
                       (hasSelection ? '已就绪，可以加载' : '请导入或下载模型'),
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: widget.state.modelState.errorMessage != null
+                    color: state.modelState.errorMessage != null
                         ? AppColors.errorText
                         : AppColors.steel,
                   ),
@@ -804,7 +870,7 @@ class _ModelSheetState extends State<_ModelSheet> {
           if (isDownloading) ...[
             const SizedBox(height: 10),
             Text(
-              widget.state.modelDownloadState.progressLabel,
+              state.modelDownloadState.progressLabel,
               style: Theme.of(
                 context,
               ).textTheme.bodySmall?.copyWith(color: AppColors.steel),

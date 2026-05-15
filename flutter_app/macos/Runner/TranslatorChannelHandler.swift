@@ -1,5 +1,6 @@
 import Foundation
 import FlutterMacOS
+import UniformTypeIdentifiers
 
 final class TranslatorChannelHandler: NSObject {
   private let channelName = "ai_offline_translator/translator"
@@ -98,36 +99,48 @@ final class TranslatorChannelHandler: NSObject {
   }
 
   private func pickModelFile(result: @escaping FlutterResult) {
-    let panel = NSOpenPanel()
-    panel.canChooseFiles = true
-    panel.canChooseDirectories = false
-    panel.allowsMultipleSelection = false
-    panel.allowedFileTypes = ["gguf"]
-    panel.begin { response in
-      if response == .OK {
-        result(panel.url?.path)
-        return
+    DispatchQueue.main.async {
+      let panel = NSOpenPanel()
+      panel.canChooseFiles = true
+      panel.canChooseDirectories = false
+      panel.allowsMultipleSelection = false
+      if #available(macOS 11.0, *) {
+        panel.allowedContentTypes = [UTType(filenameExtension: "gguf")!]
+      } else {
+        panel.allowedFileTypes = ["gguf"]
       }
-      result(nil)
+      panel.begin { response in
+        if response == .OK {
+          result(panel.url?.path)
+          return
+        }
+        result(nil)
+      }
     }
   }
 
   private func importModelFile(result: @escaping FlutterResult) {
-    let panel = NSOpenPanel()
-    panel.canChooseFiles = true
-    panel.canChooseDirectories = false
-    panel.allowsMultipleSelection = false
-    panel.allowedFileTypes = ["gguf"]
-    panel.begin { response in
-      guard response == .OK, let sourceURL = panel.url else {
-        result(nil)
-        return
+    DispatchQueue.main.async {
+      let panel = NSOpenPanel()
+      panel.canChooseFiles = true
+      panel.canChooseDirectories = false
+      panel.allowsMultipleSelection = false
+      if #available(macOS 11.0, *) {
+        panel.allowedContentTypes = [UTType(filenameExtension: "gguf")!]
+      } else {
+        panel.allowedFileTypes = ["gguf"]
       }
-      do {
-        let importedURL = try self.copyModelToAppSupport(sourceURL)
-        result(importedURL.path)
-      } catch {
-        result(FlutterError(code: "import_failed", message: error.localizedDescription, details: nil))
+      panel.begin { response in
+        guard response == .OK, let sourceURL = panel.url else {
+          result(nil)
+          return
+        }
+        do {
+          let importedURL = try self.copyModelToAppSupport(sourceURL)
+          result(importedURL.path)
+        } catch {
+          result(FlutterError(code: "import_failed", message: error.localizedDescription, details: nil))
+        }
       }
     }
   }

@@ -69,7 +69,9 @@ Flutter app 骨架位于 `flutter_app/`。
 - 模型选择不支持手填路径；界面只显示模型名称，真实路径仅保存在 App 内部状态
 - macOS 当前通过 `MethodChannel` 调用原生 `TranslatorBridge` / `TranslatorEngine`，直接链接 `llama.cpp` 与 `llama-common`
 - 原生引擎使用 `llama.cpp/common` 的 jinja chat template、tokenize、sampler 能力，避免手写 prompt token 序列导致乱码
-- 非 macOS 平台当前仍保留确定性的 mock service，后续再接原生推理层
+- Android 端已完成 MethodChannelHandler、ModelScope 下载器、`file_picker` 导入和 JNI 翻译桥接骨架
+- 原生 C++ `translator_engine` 已抽取到 `flutter_app/native/translator_engine/`，macOS 和 Android 共用
+- Android JNI 编译需要先构建 llama.cpp arm64-v8a 静态库：`scripts/build_android_llama.sh`
 
 常用命令：
 
