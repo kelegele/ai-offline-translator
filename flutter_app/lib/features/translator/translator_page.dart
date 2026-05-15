@@ -62,8 +62,8 @@ class _TranslatorPageState extends State<TranslatorPage> {
                         maxLines: 8,
                         textInputAction: TextInputAction.newline,
                         decoration: const InputDecoration(
-                          labelText: 'Source text',
-                          hintText: 'Enter text to translate offline',
+                          labelText: '原文',
+                          hintText: '输入要离线翻译的文本',
                         ),
                         onChanged: _controller.updateInput,
                       ),
@@ -74,14 +74,14 @@ class _TranslatorPageState extends State<TranslatorPage> {
                             onPressed: state.status == TranslatorStatus.translating
                                 ? null
                                 : () => _controller.translate(_textController.text),
-                            child: const Text('Translate'),
+                            child: const Text('翻译'),
                           ),
                           const SizedBox(width: AppSpacing.sm),
                           OutlinedButton(
                             onPressed: state.status == TranslatorStatus.translating
                                 ? _controller.cancel
                                 : null,
-                            child: const Text('Cancel'),
+                            child: const Text('取消'),
                           ),
                           const Spacer(),
                           TextButton(
@@ -89,7 +89,7 @@ class _TranslatorPageState extends State<TranslatorPage> {
                               _textController.clear();
                               _controller.clear();
                             },
-                            child: const Text('Clear'),
+                            child: const Text('清空'),
                           ),
                         ],
                       ),
@@ -108,12 +108,12 @@ class _TranslatorPageState extends State<TranslatorPage> {
 
   String _statusLabel(TranslatorStatus status) {
     return switch (status) {
-      TranslatorStatus.idle => 'Local model ready',
-      TranslatorStatus.ready => 'Ready to translate',
-      TranslatorStatus.translating => 'Translating locally',
-      TranslatorStatus.completed => 'Translation complete',
-      TranslatorStatus.cancelled => 'Translation cancelled',
-      TranslatorStatus.error => 'Needs attention',
+      TranslatorStatus.idle => '本地模型已就绪',
+      TranslatorStatus.ready => '准备翻译',
+      TranslatorStatus.translating => '正在本地翻译',
+      TranslatorStatus.completed => '翻译完成',
+      TranslatorStatus.cancelled => '翻译已取消',
+      TranslatorStatus.error => '需要处理',
     };
   }
 }
@@ -133,7 +133,7 @@ class _Header extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'AI Offline Translator',
+                'AI 离线翻译',
                 style: textTheme.headlineMedium?.copyWith(
                   fontWeight: FontWeight.w600,
                   color: AppColors.ink,
@@ -141,7 +141,7 @@ class _Header extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.xs),
               Text(
-                'Flutter UI scaffold with a future native llama.cpp bridge.',
+                'Flutter UI 骨架，后续接入原生 llama.cpp。',
                 style: textTheme.bodyMedium?.copyWith(color: AppColors.steel),
               ),
             ],
@@ -177,7 +177,7 @@ class _LanguageRow extends StatelessWidget {
     required this.onTargetChanged,
   });
 
-  static const languages = ['English', 'Chinese', 'Japanese', 'Korean'];
+  static const languages = ['英语', '中文', '日语', '韩语'];
 
   final String sourceLanguage;
   final String targetLanguage;
@@ -190,7 +190,7 @@ class _LanguageRow extends StatelessWidget {
       children: [
         Expanded(
           child: _LanguageMenu(
-            label: 'From',
+            label: '源语言',
             value: sourceLanguage,
             onChanged: onSourceChanged,
           ),
@@ -198,7 +198,7 @@ class _LanguageRow extends StatelessWidget {
         const SizedBox(width: AppSpacing.md),
         Expanded(
           child: _LanguageMenu(
-            label: 'To',
+            label: '目标语言',
             value: targetLanguage,
             onChanged: onTargetChanged,
           ),
@@ -259,7 +259,7 @@ class _OutputPanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Output',
+            '译文',
             style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: AppSpacing.md),
@@ -278,12 +278,12 @@ class _OutputPanel extends StatelessWidget {
 
   String _contentForState() {
     return switch (state.status) {
-      TranslatorStatus.idle => 'Translation output will appear here.',
-      TranslatorStatus.ready => 'Ready when you are.',
-      TranslatorStatus.translating => 'Translating...',
+      TranslatorStatus.idle => '译文会显示在这里。',
+      TranslatorStatus.ready => '准备好了。',
+      TranslatorStatus.translating => '正在翻译...',
       TranslatorStatus.completed => state.outputText,
-      TranslatorStatus.cancelled => 'Translation cancelled.',
-      TranslatorStatus.error => state.errorMessage ?? 'Something went wrong.',
+      TranslatorStatus.cancelled => '翻译已取消。',
+      TranslatorStatus.error => state.errorMessage ?? '出现错误。',
     };
   }
 }

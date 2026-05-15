@@ -6,20 +6,20 @@ void main() {
   testWidgets('renders translator workspace controls', (tester) async {
     await tester.pumpWidget(const OfflineTranslatorApp());
 
-    expect(find.text('AI Offline Translator'), findsOneWidget);
-    expect(find.text('Local model ready'), findsOneWidget);
-    expect(find.text('English'), findsWidgets);
-    expect(find.text('Chinese'), findsWidgets);
+    expect(find.text('AI 离线翻译'), findsOneWidget);
+    expect(find.text('本地模型已就绪'), findsOneWidget);
+    expect(find.text('英语'), findsWidgets);
+    expect(find.text('中文'), findsWidgets);
     expect(find.byType(TextField), findsOneWidget);
-    expect(find.text('Translate'), findsOneWidget);
-    expect(find.text('Clear'), findsOneWidget);
+    expect(find.text('翻译'), findsOneWidget);
+    expect(find.text('清空'), findsOneWidget);
   });
 
   testWidgets('translates hello with mock service', (tester) async {
     await tester.pumpWidget(const OfflineTranslatorApp());
 
     await tester.enterText(find.byType(TextField), 'Hello');
-    await tester.tap(find.text('Translate'));
+    await tester.tap(find.text('翻译'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 1));
 

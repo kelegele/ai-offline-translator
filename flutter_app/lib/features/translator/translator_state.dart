@@ -12,8 +12,8 @@ class TranslatorState {
     this.status = TranslatorStatus.idle,
     this.inputText = '',
     this.outputText = '',
-    this.sourceLanguage = 'English',
-    this.targetLanguage = 'Chinese',
+    this.sourceLanguage = '英语',
+    this.targetLanguage = '中文',
     this.errorMessage,
   });
 

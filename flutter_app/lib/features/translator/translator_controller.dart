@@ -38,7 +38,7 @@ class TranslatorController extends ChangeNotifier {
       _state = _state.copyWith(
         status: TranslatorStatus.error,
         inputText: text,
-        errorMessage: 'Enter text to translate.',
+        errorMessage: '请输入要翻译的内容。',
       );
       notifyListeners();
       return;

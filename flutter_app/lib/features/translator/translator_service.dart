@@ -35,8 +35,8 @@ class MockTranslatorService implements TranslatorService {
     required String targetLanguage,
   }) async {
     final normalized = text.trim().toLowerCase();
-    if (sourceLanguage == 'English' &&
-        targetLanguage == 'Chinese' &&
+    if (sourceLanguage == '英语' &&
+        targetLanguage == '中文' &&
         normalized == 'hello') {
       return '你好';
     }
@@ -52,6 +52,6 @@ class MockTranslatorService implements TranslatorService {
 
   @override
   Future<String> getModelStatus() async {
-    return 'Local model ready';
+    return '本地模型已就绪';
   }
 }

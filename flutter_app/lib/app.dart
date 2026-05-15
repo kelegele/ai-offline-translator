@@ -9,7 +9,7 @@ class OfflineTranslatorApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'AI Offline Translator',
+      title: 'AI 离线翻译',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       home: const TranslatorPage(),

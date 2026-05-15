@@ -33,7 +33,7 @@ class DelayedTranslatorService implements TranslatorService {
   Future<void> unloadModel() async {}
 
   @override
-  Future<String> getModelStatus() async => 'Local model ready';
+  Future<String> getModelStatus() async => '本地模型已就绪';
 }
 
 class ThrowingTranslatorService implements TranslatorService {
@@ -52,7 +52,7 @@ class ThrowingTranslatorService implements TranslatorService {
     required String sourceLanguage,
     required String targetLanguage,
   }) {
-    throw StateError('native bridge unavailable');
+    throw StateError('原生翻译桥接不可用');
   }
 
   @override
@@ -62,7 +62,7 @@ class ThrowingTranslatorService implements TranslatorService {
   Future<void> unloadModel() async {}
 
   @override
-  Future<String> getModelStatus() async => 'Native bridge not connected';
+  Future<String> getModelStatus() async => '原生桥接未连接';
 }
 
 void main() {
@@ -70,8 +70,8 @@ void main() {
     final controller = TranslatorController(service: const MockTranslatorService());
 
     expect(controller.state.status, TranslatorStatus.idle);
-    expect(controller.state.sourceLanguage, 'English');
-    expect(controller.state.targetLanguage, 'Chinese');
+    expect(controller.state.sourceLanguage, '英语');
+    expect(controller.state.targetLanguage, '中文');
   });
 
   test('empty input is rejected without calling translation', () async {
@@ -80,7 +80,7 @@ void main() {
     await controller.translate('   ');
 
     expect(controller.state.status, TranslatorStatus.error);
-    expect(controller.state.errorMessage, 'Enter text to translate.');
+    expect(controller.state.errorMessage, '请输入要翻译的内容。');
   });
 
   test('successful translation updates output', () async {
@@ -99,7 +99,7 @@ void main() {
     await controller.translate('Hello');
 
     expect(controller.state.status, TranslatorStatus.error);
-    expect(controller.state.errorMessage, 'native bridge unavailable');
+    expect(controller.state.errorMessage, '原生翻译桥接不可用');
   });
 
   test('cancel sets cancelled state', () async {

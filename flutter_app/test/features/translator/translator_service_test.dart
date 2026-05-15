@@ -7,8 +7,8 @@ void main() {
 
     final result = await service.translate(
       text: 'Hello',
-      sourceLanguage: 'English',
-      targetLanguage: 'Chinese',
+      sourceLanguage: '英语',
+      targetLanguage: '中文',
     );
 
     expect(result, '你好');
@@ -19,10 +19,10 @@ void main() {
 
     final result = await service.translate(
       text: 'Good morning',
-      sourceLanguage: 'English',
-      targetLanguage: 'Chinese',
+      sourceLanguage: '英语',
+      targetLanguage: '中文',
     );
 
-    expect(result, '[Chinese] Good morning');
+    expect(result, '[中文] Good morning');
   });
 }
