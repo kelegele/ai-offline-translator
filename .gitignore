@@ -8,6 +8,7 @@
 .env
 .env.*
 .uv-cache/
+.worktrees/
 
 # Local models / large binaries
 models/*.gguf
