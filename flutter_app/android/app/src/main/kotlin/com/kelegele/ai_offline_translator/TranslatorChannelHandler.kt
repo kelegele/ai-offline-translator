@@ -2,10 +2,16 @@ package com.kelegele.ai_offline_translator
 
 import android.content.Context
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
 import java.io.FileInputStream
+import java.io.FileOutputStream
+import java.net.HttpURLConnection
+import java.net.URL
+import java.util.concurrent.Executors
 
 class TranslatorChannelHandler(
     private val context: Context,
@@ -17,8 +23,22 @@ class TranslatorChannelHandler(
         private const val DEFAULT_MODEL_URL =
             "https://modelscope.cn/models/AngelSlim/Hy-MT1.5-1.8B-1.25bit-GGUF/resolve/master/Hy-MT1.5-1.8B-STQ1_0.gguf"
         private const val MINIMUM_MODEL_BYTES: Long = 100 * 1024 * 1024
-        private val GGUF_MAGIC = intArrayOf(0x47, 0x47, 0x55, 0x46)
+        private val GGUF_MAGIC = byteArrayOf(0x47, 0x47, 0x55, 0x46)
     }
+
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val downloadExecutor = Executors.newSingleThreadExecutor()
+    private var downloadJob: DownloadJob? = null
+
+    private var downloadStatus: Map<String, Any?> = mapOf(
+        "state" to "idle",
+        "receivedBytes" to 0L,
+        "totalBytes" to 0L,
+        "message" to "",
+        "path" to null,
+    )
+
+    private var engineLoaded = false
 
     fun register(flutterEngine: FlutterEngine) {
         MethodChannel(
@@ -28,11 +48,11 @@ class TranslatorChannelHandler(
             when (call.method) {
                 "pickModelFile" -> pickModelFile(result)
                 "importModelFile" -> importModelFile(result)
-                "getDefaultModelInfo" -> result(defaultModelInfo())
-                "downloadDefaultModel" -> result.notImplemented()
-                "cancelModelDownload" -> result.notImplemented()
-                "getModelDownloadStatus" -> result(emptyMap<String, Any>())
                 "importModelFromUri" -> handleImportModelFromUri(call.arguments, result)
+                "getDefaultModelInfo" -> result(defaultModelInfo())
+                "downloadDefaultModel" -> handleDownloadDefaultModel(result)
+                "cancelModelDownload" -> handleCancelDownload(result)
+                "getModelDownloadStatus" -> result(downloadStatus)
                 "loadModel" -> handleLoadModel(call.arguments, result)
                 "translate" -> handleTranslate(call.arguments, result)
                 "cancel" -> handleCancel(result)
@@ -54,76 +74,11 @@ class TranslatorChannelHandler(
     // --- File picking / import ---
 
     private fun pickModelFile(result: MethodChannel.Result) {
-        // Android does not support pickModelFile via MethodChannel directly.
-        // The Flutter side should use file_picker or a platform-specific intent.
-        result.error(
-            "not_supported",
-            "Android 使用 importModelFile 而非 pickModelFile",
-            null,
-        )
+        result.error("not_supported", "Android 使用 importModelFromUri", null)
     }
 
     private fun importModelFile(result: MethodChannel.Result) {
-        // On Android, the Flutter side uses file_picker to get a content URI,
-        // then calls importModelFile with the URI string.
-        // For now, this is a placeholder that will be enhanced with intent-based picking.
-        result.error(
-            "not_implemented",
-            "请使用 Flutter 侧的文件选择器获取模型 URI，然后调用 importModelFromUri",
-            null,
-        )
-    }
-
-    /**
-     * Import a model file from a content URI (obtained via file_picker or system picker).
-     * Validates GGUF magic and copies to app-private models directory.
-     */
-    fun importModelFromUri(uriString: String): String? {
-        val uri = Uri.parse(uriString)
-        val fileName = uri.lastPathSegment?.substringAfterLast("/") ?: DEFAULT_MODEL_FILENAME
-        val destFile = File(modelsDir(), fileName)
-
-        // Check if already imported with same size
-        context.contentResolver.openInputStream(uri)?.use { input ->
-            val header = ByteArray(4)
-            val read = input.read(header)
-            if (read < 4 || !header.contentEquals(
-                    GGUF_MAGIC.map { it.toByte() }.toByteArray()
-                )
-            ) {
-                return null
-            }
-
-            if (destFile.exists()) {
-                val sourceSize = getFileSize(uri)
-                if (sourceSize > 0 && sourceSize == destFile.length()) {
-                    return destFile.absolutePath
-                }
-                destFile.delete()
-            }
-
-            // Copy the full file
-            context.contentResolver.openInputStream(uri)?.use { src ->
-                destFile.outputStream().use { dst ->
-                    // Write the magic bytes first (already read)
-                    dst.write(header)
-                    // Then copy the rest
-                    src.copyTo(dst)
-                }
-            }
-        }
-
-        return if (destFile.exists()) destFile.absolutePath else null
-    }
-
-    private fun getFileSize(uri: Uri): Long {
-        return try {
-            context.contentResolver.openAssetFileDescriptor(uri, "r")?.use {
-                it.length
-            } ?: 0L
-        } catch (_: Exception) {
-            0L
-        }
+        result.error("not_implemented", "请使用 importModelFromUri", null)
     }
 
     private fun handleImportModelFromUri(args: Any?, result: MethodChannel.Result) {
@@ -139,6 +94,47 @@ class TranslatorChannelHandler(
             result.success(importedPath)
         } else {
             result.error("import_failed", "导入失败：文件不是有效的 GGUF 模型", null)
+        }
+    }
+
+    fun importModelFromUri(uriString: String): String? {
+        val uri = Uri.parse(uriString)
+        val fileName = uri.lastPathSegment?.substringAfterLast("/") ?: DEFAULT_MODEL_FILENAME
+        val destFile = File(modelsDir(), fileName)
+
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            val header = ByteArray(4)
+            val read = input.read(header)
+            if (read < 4 || !header.contentEquals(GGUF_MAGIC)) {
+                return null
+            }
+
+            if (destFile.exists()) {
+                val sourceSize = getFileSize(uri)
+                if (sourceSize > 0 && sourceSize == destFile.length()) {
+                    return destFile.absolutePath
+                }
+                destFile.delete()
+            }
+
+            context.contentResolver.openInputStream(uri)?.use { src ->
+                destFile.outputStream().use { dst ->
+                    dst.write(header)
+                    src.copyTo(dst)
+                }
+            }
+        }
+
+        return if (destFile.exists()) destFile.absolutePath else null
+    }
+
+    private fun getFileSize(uri: Uri): Long {
+        return try {
+            context.contentResolver.openAssetFileDescriptor(uri, "r")?.use {
+                it.length
+            } ?: 0L
+        } catch (_: Exception) {
+            0L
         }
     }
 
@@ -162,18 +158,86 @@ class TranslatorChannelHandler(
                 val magic = ByteArray(4)
                 val read = fis.read(magic)
                 if (read < 4) return false
-                return magic.contentEquals(
-                    GGUF_MAGIC.map { it.toByte() }.toByteArray()
-                )
+                return magic.contentEquals(GGUF_MAGIC)
             }
         } catch (_: Exception) {
             return false
         }
     }
 
-    // --- Engine stubs (will be connected to JNI in Task 5) ---
+    // --- ModelScope downloader ---
 
-    private var engineLoaded = false
+    private fun handleDownloadDefaultModel(result: MethodChannel.Result) {
+        // Check if already downloaded
+        val destFile = File(modelsDir(), DEFAULT_MODEL_FILENAME)
+        if (destFile.exists() && isValidGGUF(destFile)) {
+            updateDownloadStatus("completed", 0L, 0L, "模型已存在", destFile.absolutePath)
+            result.success(destFile.absolutePath)
+            return
+        }
+
+        // Check if download already in progress
+        if (downloadJob?.isRunning == true) {
+            result.error("download_in_progress", "模型正在下载", null)
+            return
+        }
+
+        // Start download
+        updateDownloadStatus("downloading", 0L, 0L, "正在连接 ModelScope", null)
+        val pendingResult = MethodChannelResultHolder(result)
+
+        downloadJob = DownloadJob(
+            url = DEFAULT_MODEL_URL,
+            destFile = destFile,
+            tempFile = File(modelsDir(), "$DEFAULT_MODEL_FILENAME.tmp"),
+            onProgress = { received, total, message ->
+                mainHandler.post {
+                    updateDownloadStatus("downloading", received, total, message, null)
+                }
+            },
+            onComplete = { path ->
+                mainHandler.post {
+                    updateDownloadStatus("completed", 0L, 0L, "模型已下载", path)
+                    pendingResult.success(path)
+                }
+            },
+            onError = { message ->
+                mainHandler.post {
+                    updateDownloadStatus("failed", 0L, 0L, message, null)
+                    pendingResult.error("download_failed", message, null)
+                }
+            },
+        )
+
+        downloadExecutor.execute { downloadJob!!.run() }
+    }
+
+    private fun handleCancelDownload(result: MethodChannel.Result) {
+        val job = downloadJob
+        if (job != null && job.isRunning) {
+            job.cancel()
+            updateDownloadStatus("cancelled", 0L, 0L, "下载已取消", null)
+        }
+        result.success(null)
+    }
+
+    private fun updateDownloadStatus(
+        state: String,
+        receivedBytes: Long,
+        totalBytes: Long,
+        message: String,
+        path: String?,
+    ) {
+        downloadStatus = mapOf(
+            "state" to state,
+            "receivedBytes" to receivedBytes,
+            "totalBytes" to totalBytes,
+            "message" to message,
+            "path" to path,
+        )
+    }
+
+    // --- Engine stubs (will be connected to JNI in Task 5) ---
 
     private fun handleLoadModel(args: Any?, result: MethodChannel.Result) {
         @Suppress("UNCHECKED_CAST")
@@ -185,9 +249,6 @@ class TranslatorChannelHandler(
             result.error("bad_args", "缺少模型路径", null)
             return
         }
-        val nCtx = (map["nCtx"] as? Number)?.toInt() ?: 256
-        val nThreads = (map["nThreads"] as? Number)?.toInt() ?: 2
-
         val file = File(path)
         if (!file.exists()) {
             result.error("load_failed", "模型文件不存在：$path", null)
@@ -210,7 +271,6 @@ class TranslatorChannelHandler(
             return
         }
         val text = map["text"] as? String ?: ""
-        val sourceLanguage = map["sourceLanguage"] as? String ?: "英语"
         val targetLanguage = map["targetLanguage"] as? String ?: "中文"
 
         if (!engineLoaded) {
@@ -235,5 +295,121 @@ class TranslatorChannelHandler(
 
     private fun handleGetModelStatus(result: MethodChannel.Result) {
         result.success(if (engineLoaded) "本地模型已就绪" else "未加载模型")
+    }
+}
+
+/** Wraps a MethodChannel.Result so it can be called from background thread via mainHandler. */
+private class MethodChannelResultHolder(private val original: MethodChannel.Result) {
+    private var used = false
+
+    fun success(result: Any?) {
+        if (!used) {
+            used = true
+            original.success(result)
+        }
+    }
+
+    fun error(code: String, message: String?, details: Any?) {
+        if (!used) {
+            used = true
+            original.error(code, message, details)
+        }
+    }
+}
+
+/** Background download job with cancellation support. */
+private class DownloadJob(
+    private val url: String,
+    private val destFile: File,
+    private val tempFile: File,
+    private val onProgress: (Long, Long, String) -> Unit,
+    private val onComplete: (String) -> Unit,
+    private val onError: (String) -> Unit,
+) {
+    @Volatile
+    var isRunning = false
+        private set
+
+    @Volatile
+    private var cancelled = false
+
+    fun run() {
+        isRunning = true
+        try {
+            val connection = URL(url).openConnection() as HttpURLConnection
+            connection.connectTimeout = 30_000
+            connection.readTimeout = 60_000
+            connection.connect()
+
+            val totalBytes = connection.contentLengthLong
+            if (totalBytes > 0) {
+                onProgress(0L, totalBytes, "正在下载模型")
+            } else {
+                onProgress(0L, 0L, "正在下载模型")
+            }
+
+            tempFile.outputStream().buffered().use { output ->
+                connection.inputStream.buffered().use { input ->
+                    val buffer = ByteArray(8192)
+                    var receivedBytes = 0L
+                    var lastReport = 0L
+
+                    while (!cancelled) {
+                        val read = input.read(buffer)
+                        if (read == -1) break
+                        output.write(buffer, 0, read)
+                        receivedBytes += read
+
+                        val now = System.currentTimeMillis()
+                        if (now - lastReport > 500) {
+                            lastReport = now
+                            val msg = if (totalBytes > 0) {
+                                "已下载 ${receivedBytes / 1024 / 1024}MB / ${totalBytes / 1024 / 1024}MB"
+                            } else {
+                                "已下载 ${receivedBytes / 1024 / 1024}MB"
+                            }
+                            onProgress(receivedBytes, totalBytes, msg)
+                        }
+                    }
+                }
+            }
+
+            if (cancelled) {
+                tempFile.delete()
+                return
+            }
+
+            // Validate downloaded file
+            if (!tempFile.exists() || tempFile.length() < MINIMUM_MODEL_BYTES) {
+                tempFile.delete()
+                onError("下载的文件大小不足，请重试")
+                return
+            }
+
+            // Check GGUF magic
+            FileInputStream(tempFile).use { fis ->
+                val magic = ByteArray(4)
+                if (fis.read(magic) < 4 || !magic.contentEquals(byteArrayOf(0x47, 0x47, 0x55, 0x46))) {
+                    tempFile.delete()
+                    onError("下载的文件不是有效的 GGUF 模型")
+                    return
+                }
+            }
+
+            // Move temp to final
+            if (destFile.exists()) destFile.delete()
+            tempFile.renameTo(destFile)
+
+            onComplete(destFile.absolutePath)
+        } catch (e: Exception) {
+            tempFile.delete()
+            onError("模型下载失败：${e.message}")
+        } finally {
+            isRunning = false
+        }
+    }
+
+    fun cancel() {
+        cancelled = true
     }
 }

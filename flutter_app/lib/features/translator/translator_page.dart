@@ -79,7 +79,7 @@ class _TranslatorPageState extends State<TranslatorPage> {
                         onImportPressed: Platform.isMacOS || Platform.isAndroid
                             ? _importModel
                             : null,
-                        onDownloadPressed: Platform.isMacOS
+                        onDownloadPressed: Platform.isMacOS || Platform.isAndroid
                             ? _downloadDefaultModel
                             : null,
                         onCancelDownloadPressed:
