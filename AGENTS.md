@@ -41,6 +41,15 @@
 
 Markdown 标题应清晰描述内容，仓库内文件链接使用相对路径。后续 Dart 代码遵循标准 Flutter 格式，使用两个空格缩进，文件名采用 `snake_case.dart`。Dart 类名使用 PascalCase，方法、字段和 channel 名称使用 lowerCamelCase。原生桥接文件应按职责命名，例如 `translator_engine.cpp` 或 `TranslatorChannelHandler.kt`。
 
+## UI 与视觉规范
+
+涉及 Flutter UI、页面布局、组件样式、颜色、字体、间距或交互状态的改动，必须先阅读并遵循 `DESIGN.md`。
+
+- `DESIGN.md` 是当前项目的视觉规范来源，基于 MiniMax 风格。
+- 首版 UI 应保持工具型翻译界面，不做营销页或 landing page。
+- 使用 `DESIGN.md` 中的颜色、圆角、间距、按钮、输入框和卡片规则作为默认设计系统。
+- 如 Flutter 默认字体或平台字体无法直接使用 `DM Sans`，应先保持排版比例和层级一致，再单独讨论字体引入。
+
 ## 测试规范
 
 新增功能应同步补充测试。Flutter 测试放在 `flutter_app/test/`，文件名使用 `_test.dart` 后缀。原生推理代码在接入 UI 前，应提供小型、可重复的测试或脚本，覆盖模型加载、取消推理和错误处理。
