@@ -54,6 +54,8 @@ class _TranslatorPageState extends State<TranslatorPage> {
     return RegExp(r'[\w\u4e00-\u9fff\u3400-\u4dbf]').allMatches(text).length;
   }
 
+  bool get _isMobile => Platform.isAndroid || Platform.isIOS;
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -66,20 +68,24 @@ class _TranslatorPageState extends State<TranslatorPage> {
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 920),
                 child: Padding(
-                  padding: const EdgeInsets.all(AppSpacing.xl),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: _isMobile ? AppSpacing.md : AppSpacing.xl,
+                    vertical: AppSpacing.md,
+                  ),
                   child: ListView(
                     children: [
                       _Header(
                         status: _statusLabel(state),
                         subtitle: _subtitle(),
                       ),
-                      const SizedBox(height: AppSpacing.xl),
+                      const SizedBox(height: AppSpacing.md),
                       _ModelPanel(
                         state: state,
                         onImportPressed: Platform.isMacOS || Platform.isAndroid
                             ? _importModel
                             : null,
-                        onDownloadPressed: Platform.isMacOS || Platform.isAndroid
+                        onDownloadPressed:
+                            Platform.isMacOS || Platform.isAndroid
                             ? _downloadDefaultModel
                             : null,
                         onCancelDownloadPressed:
@@ -91,18 +97,18 @@ class _TranslatorPageState extends State<TranslatorPage> {
                             ? _controller.unloadModel
                             : null,
                       ),
-                      const SizedBox(height: AppSpacing.xl),
+                      const SizedBox(height: AppSpacing.md),
                       _LanguageRow(
                         sourceLanguage: state.sourceLanguage,
                         targetLanguage: state.targetLanguage,
                         onSourceChanged: _controller.updateSourceLanguage,
                         onTargetChanged: _controller.updateTargetLanguage,
                       ),
-                      const SizedBox(height: AppSpacing.md),
+                      const SizedBox(height: AppSpacing.sm),
                       TextField(
                         controller: _textController,
-                        minLines: 5,
-                        maxLines: 8,
+                        minLines: 4,
+                        maxLines: 6,
                         textInputAction: TextInputAction.newline,
                         decoration: const InputDecoration(
                           labelText: '原文',
@@ -121,7 +127,7 @@ class _TranslatorPageState extends State<TranslatorPage> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: AppSpacing.md),
+                      const SizedBox(height: AppSpacing.sm),
                       Row(
                         children: [
                           FilledButton(
@@ -152,8 +158,8 @@ class _TranslatorPageState extends State<TranslatorPage> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: AppSpacing.xl),
-                      SizedBox(height: 260, child: _OutputPanel(state: state)),
+                      const SizedBox(height: AppSpacing.md),
+                      _OutputPanel(state: state),
                     ],
                   ),
                 ),
@@ -180,18 +186,16 @@ class _TranslatorPageState extends State<TranslatorPage> {
 
   Future<String?> _importAndroidModel() async {
     try {
-      // file_picker launches system picker, returns a file path
-      // Then we pass it to native bridge for GGUF validation and copy
       final picked = await FilePicker.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ["gguf"],
+        allowedExtensions: ['gguf'],
       );
       if (picked == null || picked.files.isEmpty) return null;
       final uri = picked.files.first.path;
       if (uri == null) return null;
       return await _translatorChannel.invokeMethod<String>(
-        "importModelFromUri",
-        {"uri": uri},
+        'importModelFromUri',
+        {'uri': uri},
       );
     } on PlatformException {
       return null;
@@ -226,40 +230,45 @@ class _TranslatorPageState extends State<TranslatorPage> {
     _downloadPollTimer = Timer.periodic(const Duration(milliseconds: 500), (
       _,
     ) async {
-      final status = await _translatorChannel.getModelDownloadStatus();
-      final state = status['state'] as String? ?? 'idle';
-      if (state != 'downloading') {
-        return;
+      try {
+        final status = await _translatorChannel.getModelDownloadStatus();
+        final state = status['state'] as String? ?? 'idle';
+        if (state == 'downloading') {
+          final received = (status['receivedBytes'] as num?)?.toInt() ?? 0;
+          final total = (status['totalBytes'] as num?)?.toInt() ?? 0;
+          final message = status['message'] as String? ?? '';
+          _controller.updateModelDownloadProgress(
+            receivedBytes: received,
+            totalBytes: total,
+            message: message,
+          );
+        }
+      } on Object {
+        // ignore polling errors
       }
-      _controller.updateModelDownloadProgress(
-        receivedBytes: status['receivedBytes'] as int? ?? 0,
-        totalBytes: status['totalBytes'] as int? ?? 0,
-        message: status['message'] as String? ?? '正在下载模型',
-      );
     });
   }
 
-  String _subtitle() {
-    if (Platform.isMacOS) {
-      return 'macOS 首版使用原生 llama.cpp 引擎，模型导入到 App 私有目录。';
-    }
-    return '当前平台仍使用 mock service，macOS 优先接入真推理。';
+  String _statusLabel(TranslatorState state) {
+    return switch (state.status) {
+      TranslatorStatus.idle => 'AI 离线翻译',
+      TranslatorStatus.ready => 'AI 离线翻译',
+      TranslatorStatus.translating => '正在翻译…',
+      TranslatorStatus.completed => '翻译完成',
+      TranslatorStatus.cancelled => '已取消',
+      TranslatorStatus.error => '出错了',
+    };
   }
 
-  String _statusLabel(TranslatorState state) {
-    if (state.status == TranslatorStatus.translating) {
-      return '正在本地翻译';
-    }
-    if (state.status == TranslatorStatus.completed) {
-      return '翻译完成';
-    }
-    if (state.status == TranslatorStatus.cancelled) {
-      return '翻译已取消';
-    }
-    if (state.status == TranslatorStatus.error) {
-      return '需要处理';
-    }
-    return state.runtimeStatus;
+  String _subtitle() {
+    return switch (_controller.state.status) {
+      TranslatorStatus.idle => '请先加载模型',
+      TranslatorStatus.ready => _controller.state.modelState.isReady ? '准备好了。' : '请先加载模型。',
+      TranslatorStatus.translating => '请稍候…',
+      TranslatorStatus.completed => '可以继续翻译',
+      TranslatorStatus.cancelled => '已取消翻译',
+      TranslatorStatus.error => _controller.state.errorMessage ?? '出现错误',
+    };
   }
 }
 
@@ -273,29 +282,16 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'AI 离线翻译',
-                style: textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.ink,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                subtitle,
-                style: textTheme.bodyMedium?.copyWith(color: AppColors.steel),
-              ),
-            ],
-          ),
+        Text(
+          status,
+          style: textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
         ),
+        const SizedBox(width: AppSpacing.sm),
         Container(
           padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.md,
+            horizontal: AppSpacing.sm,
             vertical: AppSpacing.xs,
           ),
           decoration: BoxDecoration(
@@ -303,7 +299,7 @@ class _Header extends StatelessWidget {
             borderRadius: BorderRadius.circular(AppRadius.full),
           ),
           child: Text(
-            status,
+            subtitle,
             style: textTheme.labelMedium?.copyWith(
               color: AppColors.successText,
               fontWeight: FontWeight.w600,
@@ -340,7 +336,7 @@ class _ModelPanel extends StatelessWidget {
         : '模型已保存到 App 私有目录';
 
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.xl),
+      padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
         color: AppColors.surface,
         border: Border.all(color: AppColors.hairline),
@@ -355,7 +351,7 @@ class _ModelPanel extends StatelessWidget {
               context,
             ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
           ),
-          const SizedBox(height: AppSpacing.md),
+          const SizedBox(height: AppSpacing.sm),
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(
@@ -388,40 +384,47 @@ class _ModelPanel extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                const SizedBox(height: AppSpacing.xxs),
-                Text(
-                  state.modelState.errorMessage ?? modelHint,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: state.modelState.errorMessage == null
-                        ? AppColors.steel
-                        : AppColors.errorText,
+                if (state.modelState.errorMessage != null) ...[
+                  const SizedBox(height: AppSpacing.xxs),
+                  Text(
+                    state.modelState.errorMessage!,
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: AppColors.errorText),
                   ),
-                ),
+                ] else ...[
+                  const SizedBox(height: AppSpacing.xxs),
+                  Text(
+                    modelHint,
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: AppColors.steel),
+                  ),
+                ],
               ],
             ),
           ),
-          const SizedBox(height: AppSpacing.md),
-          Row(
+          const SizedBox(height: AppSpacing.sm),
+          // Action buttons: wrap on small screens
+          Wrap(
+            spacing: AppSpacing.xs,
+            runSpacing: AppSpacing.xs,
             children: [
               OutlinedButton(
                 onPressed: onImportPressed,
                 child: const Text('导入模型'),
               ),
-              const SizedBox(width: AppSpacing.sm),
               OutlinedButton(
                 onPressed: state.modelDownloadState.isDownloading
                     ? null
                     : onDownloadPressed,
                 child: const Text('下载模型'),
               ),
-              if (state.modelDownloadState.isDownloading) ...[
-                const SizedBox(width: AppSpacing.sm),
+              if (state.modelDownloadState.isDownloading)
                 OutlinedButton(
                   onPressed: onCancelDownloadPressed,
                   child: const Text('取消下载'),
                 ),
-              ],
-              const SizedBox(width: AppSpacing.sm),
               FilledButton(
                 onPressed:
                     state.modelState.status == ModelLifecycleStatus.loading
@@ -429,7 +432,6 @@ class _ModelPanel extends StatelessWidget {
                     : onLoadPressed,
                 child: const Text('加载模型'),
               ),
-              const SizedBox(width: AppSpacing.sm),
               OutlinedButton(
                 onPressed:
                     state.modelState.status == ModelLifecycleStatus.unloading
@@ -437,19 +439,10 @@ class _ModelPanel extends StatelessWidget {
                     : onUnloadPressed,
                 child: const Text('卸载模型'),
               ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Text(
-                  state.runtimeStatus,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyMedium?.copyWith(color: AppColors.steel),
-                ),
-              ),
             ],
           ),
           if (state.modelDownloadState.isDownloading) ...[
-            const SizedBox(height: AppSpacing.sm),
+            const SizedBox(height: AppSpacing.xs),
             Text(
               state.modelDownloadState.progressLabel,
               style: Theme.of(
@@ -547,7 +540,7 @@ class _OutputPanel extends StatelessWidget {
         : AppColors.ink;
 
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.xl),
+      padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
         color: AppColors.surface,
         border: Border.all(color: AppColors.hairline),
@@ -581,16 +574,12 @@ class _OutputPanel extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.md),
-          Expanded(
-            child: SingleChildScrollView(
-              child: Text(
-                content,
-                style: textTheme.bodyLarge?.copyWith(
-                  color: contentColor,
-                  height: 1.5,
-                ),
-              ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            content,
+            style: textTheme.bodyLarge?.copyWith(
+              color: contentColor,
+              height: 1.5,
             ),
           ),
         ],
