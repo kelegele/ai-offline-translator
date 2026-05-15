@@ -9,6 +9,10 @@ class TranslatorChannel {
 
   final MethodChannel _channel;
 
+  Future<T?> invokeMethod<T>(String method, [dynamic arguments]) {
+    return _channel.invokeMethod<T>(method, arguments);
+  }
+
   Future<String?> pickModelFile() {
     return _channel.invokeMethod<String>('pickModelFile');
   }

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -75,8 +76,8 @@ class _TranslatorPageState extends State<TranslatorPage> {
                       const SizedBox(height: AppSpacing.xl),
                       _ModelPanel(
                         state: state,
-                        onImportPressed: Platform.isMacOS
-                            ? _importModelFile
+                        onImportPressed: Platform.isMacOS || Platform.isAndroid
+                            ? _importModel
                             : null,
                         onDownloadPressed: Platform.isMacOS
                             ? _downloadDefaultModel
@@ -164,12 +165,37 @@ class _TranslatorPageState extends State<TranslatorPage> {
     );
   }
 
-  Future<void> _importModelFile() async {
-    final path = await _translatorChannel.importModelFile();
+  Future<void> _importModel() async {
+    String? path;
+    if (Platform.isAndroid) {
+      path = await _importAndroidModel();
+    } else {
+      path = await _translatorChannel.importModelFile();
+    }
     if (path == null || path.trim().isEmpty) {
       return;
     }
     _controller.selectModel(path);
+  }
+
+  Future<String?> _importAndroidModel() async {
+    try {
+      // file_picker launches system picker, returns a file path
+      // Then we pass it to native bridge for GGUF validation and copy
+      final picked = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ["gguf"],
+      );
+      if (picked == null || picked.files.isEmpty) return null;
+      final uri = picked.files.first.path;
+      if (uri == null) return null;
+      return await _translatorChannel.invokeMethod<String>(
+        "importModelFromUri",
+        {"uri": uri},
+      );
+    } on PlatformException {
+      return null;
+    }
   }
 
   Future<void> _downloadDefaultModel() async {
