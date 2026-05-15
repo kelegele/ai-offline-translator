@@ -45,6 +45,8 @@ final class TranslatorChannelHandler: NSObject {
       result(nil)
     case "getModelDownloadStatus":
       result(downloadStatus)
+    case "findLocalModel":
+      findLocalModel(result: result)
     case "loadModel":
       guard let args = call.arguments as? [String: Any],
             let path = args["path"] as? String,
@@ -170,6 +172,26 @@ final class TranslatorChannelHandler: NSObject {
     }
     try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
     return destinationURL
+  }
+
+  private func findLocalModel(result: @escaping FlutterResult) {
+    do {
+      let modelsDir = try modelsDirectoryURL()
+      let files = try FileManager.default.contentsOfDirectory(
+        at: modelsDir,
+        includingPropertiesForKeys: [.fileSizeKey],
+        options: .skipsHiddenFiles
+      )
+      let ggufFiles = files.filter { $0.pathExtension.lowercased() == "gguf" }
+      if let first = ggufFiles.first {
+        let name = first.lastPathComponent
+        result(["path": first.path, "name": name])
+      } else {
+        result(nil)
+      }
+    } catch {
+      result(nil)
+    }
   }
 
   private func defaultModelInfo() -> [String: Any] {

@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import '../../design/app_colors.dart';
 import '../../design/app_spacing.dart';
 import 'macos_translator_service.dart';
+import 'model_download_state.dart';
 import 'model_selection_state.dart';
 import 'translator_channel.dart';
 import 'translator_controller.dart';
@@ -34,6 +35,20 @@ class _TranslatorPageState extends State<TranslatorPage> {
       service: createDefaultTranslatorService(),
     );
     _textController.addListener(_onTextChanged);
+    _autoLoadLocalModel();
+  }
+
+  Future<void> _autoLoadLocalModel() async {
+    try {
+      final info = await _translatorChannel.findLocalModel();
+      if (info == null) return;
+      final path = info['path'] as String?;
+      if (path == null || path.trim().isEmpty) return;
+      _controller.selectModel(path);
+      _controller.loadSelectedModel();
+    } on Object {
+      // silently ignore — user can manually import/load
+    }
   }
 
   @override
@@ -68,7 +83,6 @@ class _TranslatorPageState extends State<TranslatorPage> {
         controller: _controller,
         onImport: () => _importModelFromSheet(sheetContext),
         onDownload: () {
-          Navigator.pop(sheetContext);
           _downloadDefaultModel();
         },
         onLoad: () {
@@ -80,7 +94,6 @@ class _TranslatorPageState extends State<TranslatorPage> {
           _controller.unloadModel();
         },
         onCancelDownload: () {
-          Navigator.pop(sheetContext);
           _cancelModelDownload();
         },
       ),
@@ -303,7 +316,7 @@ class _TranslatorPageState extends State<TranslatorPage> {
       child: Row(
         children: [
           Text(
-            'AI 离线翻译',
+            'AI离线翻译',
             style: Theme.of(
               context,
             ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
@@ -589,10 +602,11 @@ class _InputPanelState extends State<_InputPanel> {
             textInputAction: TextInputAction.newline,
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(height: 1.6),
             textAlignVertical: TextAlignVertical.top,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               hintText: '输入要翻译的内容',
+              hintStyle: TextStyle(color: AppColors.muted.withValues(alpha: 0.6)),
               border: InputBorder.none,
-              contentPadding: EdgeInsets.fromLTRB(14, 12, 44, 28),
+              contentPadding: const EdgeInsets.fromLTRB(14, 12, 44, 28),
             ),
             onChanged: widget.onChanged,
           ),
@@ -666,18 +680,19 @@ class _OutputPanel extends StatelessWidget {
                 ),
               ),
               const Spacer(),
-              SizedBox(
-                height: 32,
-                child: TextButton.icon(
-                  onPressed: state.status == TranslatorStatus.completed
-                      ? () => Clipboard.setData(
-                          ClipboardData(text: state.outputText),
-                        )
-                      : null,
-                  icon: const Icon(Icons.copy, size: 16),
-                  label: const Text('复制'),
+              if (state.status == TranslatorStatus.completed)
+                SizedBox(
+                  height: 28,
+                  child: IconButton(
+                    onPressed: () => Clipboard.setData(
+                      ClipboardData(text: state.outputText),
+                    ),
+                    icon: const Icon(Icons.copy, size: 16),
+                    color: AppColors.steel,
+                    padding: EdgeInsets.zero,
+                    tooltip: '复制',
+                  ),
                 ),
-              ),
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -686,7 +701,9 @@ class _OutputPanel extends StatelessWidget {
               child: Text(
                 content,
                 style: textTheme.bodyLarge?.copyWith(
-                  color: contentColor,
+                  color: _isPlaceholder
+                      ? AppColors.muted.withValues(alpha: 0.6)
+                      : contentColor,
                   height: 1.6,
                 ),
               ),
@@ -695,6 +712,15 @@ class _OutputPanel extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  bool get _isPlaceholder {
+    return switch (state.status) {
+      TranslatorStatus.idle => true,
+      TranslatorStatus.ready => true,
+      TranslatorStatus.cancelled => true,
+      _ => false,
+    };
   }
 
   String _contentForState() {
@@ -838,12 +864,12 @@ class _ModelSheetState extends State<_ModelSheet> {
             runSpacing: 8,
             children: [
               OutlinedButton.icon(
-                onPressed: isDownloading ? null : widget.onImport,
+                onPressed: (isDownloading || isLoading) ? null : widget.onImport,
                 icon: const Icon(Icons.upload_file, size: 18),
                 label: const Text('导入'),
               ),
               OutlinedButton.icon(
-                onPressed: isDownloading ? null : widget.onDownload,
+                onPressed: (isDownloading || isLoading) ? null : widget.onDownload,
                 icon: const Icon(Icons.cloud_download, size: 18),
                 label: const Text('下载'),
               ),
@@ -853,7 +879,7 @@ class _ModelSheetState extends State<_ModelSheet> {
                   icon: const Icon(Icons.cancel, size: 18),
                   label: const Text('取消下载'),
                 ),
-              if (hasSelection)
+              if (hasSelection && !isLoaded)
                 FilledButton.icon(
                   onPressed: isLoading ? null : widget.onLoad,
                   icon: const Icon(Icons.bolt, size: 18),
@@ -861,12 +887,13 @@ class _ModelSheetState extends State<_ModelSheet> {
                 ),
               if (isLoaded)
                 OutlinedButton.icon(
-                  onPressed: widget.onUnload,
+                  onPressed: isLoading ? null : widget.onUnload,
                   icon: const Icon(Icons.delete_outline, size: 18),
                   label: const Text('卸载'),
                 ),
             ],
           ),
+          // Download progress or completion feedback
           if (isDownloading) ...[
             const SizedBox(height: 10),
             Text(
@@ -874,6 +901,40 @@ class _ModelSheetState extends State<_ModelSheet> {
               style: Theme.of(
                 context,
               ).textTheme.bodySmall?.copyWith(color: AppColors.steel),
+            ),
+          ],
+          if (state.modelDownloadState.status == ModelDownloadStatus.completed &&
+              !isDownloading) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Icon(Icons.check_circle, size: 14, color: AppColors.successText),
+                const SizedBox(width: 6),
+                Text(
+                  '模型已下载，请点击「加载」',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.successText,
+                  ),
+                ),
+              ],
+            ),
+          ],
+          if (state.modelDownloadState.status == ModelDownloadStatus.cancelled) ...[
+            const SizedBox(height: 10),
+            Text(
+              '下载已取消',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppColors.steel,
+              ),
+            ),
+          ],
+          if (state.modelDownloadState.status == ModelDownloadStatus.failed) ...[
+            const SizedBox(height: 10),
+            Text(
+              state.modelDownloadState.message,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppColors.errorText,
+              ),
             ),
           ],
           const SizedBox(height: 10),

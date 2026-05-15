@@ -36,6 +36,13 @@ class TranslatorChannel {
     await _channel.invokeMethod<void>('cancelModelDownload');
   }
 
+  Future<Map<String, dynamic>?> findLocalModel() async {
+    final result = await _channel.invokeMapMethod<String, dynamic>(
+      'findLocalModel',
+    );
+    return result;
+  }
+
   Future<Map<String, Object?>> getModelDownloadStatus() async {
     final result = await _channel.invokeMapMethod<String, Object?>(
       'getModelDownloadStatus',

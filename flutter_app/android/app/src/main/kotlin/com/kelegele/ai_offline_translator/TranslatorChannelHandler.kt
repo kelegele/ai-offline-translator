@@ -61,6 +61,7 @@ class TranslatorChannelHandler(
                 "downloadDefaultModel" -> handleDownloadDefaultModel(res)
                 "cancelModelDownload" -> handleCancelDownload(res)
                 "getModelDownloadStatus" -> res.success(downloadStatus)
+                "findLocalModel" -> findLocalModel(res)
                 "loadModel" -> handleLoadModel(call.arguments, res)
                 "translate" -> handleTranslate(call.arguments, res)
                 "cancel" -> handleCancel(res)
@@ -77,6 +78,21 @@ class TranslatorChannelHandler(
         val dir = File(context.filesDir, MODELS_DIR)
         if (!dir.exists()) dir.mkdirs()
         return dir
+    }
+
+    private fun findLocalModel(result: MethodChannel.Result) {
+        try {
+            val dir = modelsDir()
+            val ggufFiles = dir.listFiles { f -> f.extension.lowercase() == "gguf" }
+            if (ggufFiles != null && ggufFiles.isNotEmpty()) {
+                val first = ggufFiles.first()
+                result.success(mapOf("path" to first.absolutePath, "name" to first.name))
+            } else {
+                result.success(null)
+            }
+        } catch (e: Exception) {
+            result.success(null)
+        }
     }
 
     // --- File picking / import ---
