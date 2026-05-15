@@ -193,6 +193,10 @@ final class MacOSLlamaService {
   private func cleanOutput(_ rawOutput: String, sourceText: String) -> String {
     var output = rawOutput.trimmingCharacters(in: .whitespacesAndNewlines)
     output = output.replacingOccurrences(of: "[end of text]", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
+    // Remove the prompt prefix (up to the last double-newline which separates prompt from translation)
+    if let lastDoubleNewline = output.range(of: "\n\n", options: .backwards) {
+      output = String(output[lastDoubleNewline.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
     if output.hasPrefix(sourceText) {
       output = String(output.dropFirst(sourceText.count)).trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -227,6 +231,7 @@ final class MacOSLlamaService {
   private func repositoryRoot() -> URL {
     let sourceFile = URL(fileURLWithPath: #filePath)
     return sourceFile
+      .deletingLastPathComponent()
       .deletingLastPathComponent()
       .deletingLastPathComponent()
       .deletingLastPathComponent()

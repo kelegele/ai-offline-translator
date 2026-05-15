@@ -187,6 +187,12 @@ class LlamaCliTranslatorService implements TranslatorService {
   String _cleanOutput(String rawOutput, String sourceText) {
     var output = rawOutput.trim();
     output = output.replaceAll('[end of text]', '').trim();
+    // Remove the prompt prefix (up to the last double-newline which separates prompt from translation)
+    final doubleNewline = output.lastIndexOf('\n\n');
+    if (doubleNewline != -1) {
+      output = output.substring(doubleNewline + 2).trim();
+    }
+    // Also try removing source text if it appears at the start
     if (output.startsWith(sourceText)) {
       output = output.substring(sourceText.length).trim();
     }

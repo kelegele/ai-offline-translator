@@ -1,6 +1,7 @@
 import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../design/app_colors.dart';
 import '../../design/app_spacing.dart';
@@ -31,14 +32,25 @@ class _TranslatorPageState extends State<TranslatorPage> {
     _controller = TranslatorController(
       service: createDefaultTranslatorService(),
     );
+    _textController.addListener(_onTextChanged);
   }
 
   @override
   void dispose() {
+    _textController.removeListener(_onTextChanged);
     _textController.dispose();
     _modelPathController.dispose();
     _controller.dispose();
     super.dispose();
+  }
+
+  void _onTextChanged() {
+    setState(() {}); // rebuild for character counter
+  }
+
+  int get _characterCount {
+    final text = _textController.text;
+    return RegExp(r'[\w\u4e00-\u9fff\u3400-\u4dbf]').allMatches(text).length;
   }
 
   @override
@@ -90,6 +102,17 @@ class _TranslatorPageState extends State<TranslatorPage> {
                           hintText: '输入要离线翻译的文本',
                         ),
                         onChanged: _controller.updateInput,
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4, right: 4),
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: Text(
+                            '$_characterCount/200',
+                            style: Theme.of(context).textTheme.labelSmall
+                                ?.copyWith(color: AppColors.steel),
+                          ),
+                        ),
                       ),
                       const SizedBox(height: AppSpacing.md),
                       Row(
@@ -403,9 +426,30 @@ class _OutputPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '译文',
-            style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '译文',
+                style: textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              SizedBox(
+                height: 32,
+                child: TextButton.icon(
+                  onPressed: state.status == TranslatorStatus.completed
+                      ? () {
+                          Clipboard.setData(
+                            ClipboardData(text: state.outputText),
+                          );
+                        }
+                      : null,
+                  icon: const Icon(Icons.copy, size: 16),
+                  label: const Text('复制'),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: AppSpacing.md),
           Expanded(
