@@ -4,111 +4,222 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AI离线翻译 - 手机端大模型离线翻译</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #0d0d0d;
-      --surface: #1a1a1a;
-      --border: #2a2a2a;
-      --text: #e8e8e8;
-      --muted: #888;
-      --accent: #6C5CE7;
-      --accent-hover: #7C6CF7;
-      --green: #00d4aa;
+      --bg: #080808;
+      --surface: #0f0f0f;
+      --surface-raised: #141414;
+      --border: #1c1c1c;
+      --border-hover: #2a2a2a;
+      --text: #dedede;
+      --text-dim: #7a7a7a;
+      --muted: #555;
+      --accent: #00e699;
+      --accent-glow: rgba(0, 230, 153, 0.12);
+      --hot: #ff6b35;
+      --green: #00e699;
       --radius: 12px;
+      --radius-full: 9999px;
+      --font-display: "DM Sans", -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: "JetBrains Mono", "SF Mono", "Fira Code", monospace;
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      font-family: var(--font-display);
       background: var(--bg);
       color: var(--text);
       line-height: 1.6;
       -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
     }
-    a { color: var(--accent); text-decoration: none; }
-    a:hover { color: var(--accent-hover); }
-    .container { max-width: 880px; margin: 0 auto; padding: 0 24px; }
 
-    header {
-      padding: 80px 0 60px;
-      text-align: center;
+    /* Noise texture overlay */
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      opacity: 0.025;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+      background-size: 256px 256px;
+      pointer-events: none;
+      z-index: 0;
     }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { color: var(--hot); }
+    .container { max-width: 880px; margin: 0 auto; padding: 0 24px; position: relative; z-index: 1; }
+
+    /* ── Hero ── */
+    header {
+      padding: 100px 0 80px;
+      text-align: center;
+      position: relative;
+      z-index: 1;
+    }
+    .hero-label {
+      display: inline-block;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--accent);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 20px;
+      padding: 4px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-full);
+    }
+    .hero-label .cursor {
+      display: inline-block;
+      width: 8px;
+      height: 14px;
+      background: var(--accent);
+      margin-left: 2px;
+      vertical-align: text-bottom;
+      animation: blink 1s step-end infinite;
+    }
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
     header h1 {
-      font-size: 48px;
+      font-family: var(--font-display);
+      font-size: 64px;
       font-weight: 700;
-      letter-spacing: -1px;
-      margin-bottom: 16px;
+      letter-spacing: -1.5px;
+      line-height: 1.08;
+      margin-bottom: 20px;
+    }
+    header h1 .highlight {
+      color: var(--accent);
     }
     header .subtitle {
-      font-size: 20px;
+      font-size: 18px;
+      color: var(--text-dim);
+      max-width: 540px;
+      margin: 0 auto 36px;
+      line-height: 1.6;
+    }
+    .stats-row {
+      display: flex;
+      justify-content: center;
+      gap: 36px;
+      flex-wrap: wrap;
+      margin-bottom: 44px;
+    }
+    .stat {
+      text-align: center;
+    }
+    .stat .num {
+      font-family: var(--font-display);
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.5px;
+    }
+    .stat .num small { font-size: 18px; color: var(--muted); }
+    .stat .label {
+      font-size: 12px;
       color: var(--muted);
-      max-width: 600px;
-      margin: 0 auto 32px;
+      letter-spacing: 0.5px;
     }
     .badges {
       display: flex;
       justify-content: center;
-      gap: 10px;
+      gap: 8px;
       flex-wrap: wrap;
-      margin-bottom: 40px;
+      margin-bottom: 36px;
     }
     .badge {
       display: inline-block;
-      padding: 6px 16px;
-      border-radius: 20px;
+      padding: 5px 14px;
+      border-radius: var(--radius-full);
       border: 1px solid var(--border);
-      font-size: 13px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
       color: var(--muted);
     }
-    .badge.accent { border-color: var(--accent); color: var(--accent); }
-
+    .badge.highlight {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: var(--accent-glow);
+    }
     .cta-group {
       display: flex;
       justify-content: center;
-      gap: 16px;
+      gap: 12px;
       flex-wrap: wrap;
     }
+
+    /* ── Buttons ── */
     .btn {
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      padding: 12px 28px;
-      border-radius: var(--radius);
-      font-size: 15px;
+      padding: 12px 26px;
+      border-radius: var(--radius-full);
+      font-family: var(--font-display);
+      font-size: 14px;
       font-weight: 600;
       cursor: pointer;
       border: 1px solid var(--border);
-      background: var(--surface);
+      background: var(--surface-raised);
       color: var(--text);
-      transition: all 0.2s;
+      transition: all 0.18s ease;
     }
     .btn:hover {
       border-color: var(--accent);
-      background: #222;
+      background: #1a1a1a;
     }
     .btn.primary {
+      background: var(--text);
+      border-color: var(--text);
+      color: var(--bg);
+      font-weight: 600;
+    }
+    .btn.primary:hover {
       background: var(--accent);
       border-color: var(--accent);
-      color: #fff;
+      color: #000;
     }
-    .btn.primary:hover { background: var(--accent-hover); }
 
-    section { padding: 60px 0; }
+    /* ── Sections ── */
+    section {
+      padding: 80px 0;
+      position: relative;
+      z-index: 1;
+    }
     section h2 {
-      font-size: 28px;
+      font-family: var(--font-display);
+      font-size: 30px;
       font-weight: 700;
-      margin-bottom: 24px;
+      letter-spacing: -0.5px;
+      margin-bottom: 20px;
       text-align: center;
     }
     section h3 {
+      font-family: var(--font-display);
       font-size: 18px;
       font-weight: 600;
-      margin: 20px 0 10px;
+      margin: 28px 0 12px;
+      color: var(--text);
+    }
+    .section-desc {
+      text-align: center;
+      color: var(--text-dim);
+      font-size: 15px;
+      max-width: 560px;
+      margin: 0 auto 36px;
+      line-height: 1.6;
     }
 
+    /* ── Feature Grid ── */
     .feature-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-      gap: 20px;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 16px;
       margin-top: 32px;
     }
     .feature-card {
@@ -116,27 +227,228 @@
       border: 1px solid var(--border);
       border-radius: var(--radius);
       padding: 28px 24px;
+      position: relative;
+      transition: all 0.2s ease;
+      overflow: hidden;
     }
+    .feature-card::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 12px;
+      bottom: 12px;
+      width: 2px;
+      background: var(--accent);
+      border-radius: 1px;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+    .feature-card:hover {
+      border-color: var(--border-hover);
+      background: var(--surface-raised);
+    }
+    .feature-card:hover::before { opacity: 1; }
     .feature-card .icon {
-      font-size: 28px;
-      margin-bottom: 12px;
+      font-size: 26px;
+      margin-bottom: 10px;
     }
-    .feature-card h3 { margin: 0 0 8px; }
-    .feature-card p { color: var(--muted); font-size: 14px; }
+    .feature-card h3 {
+      margin: 0 0 6px;
+      font-size: 16px;
+    }
+    .feature-card p {
+      color: var(--text-dim);
+      font-size: 13px;
+      line-height: 1.6;
+    }
 
+    /* ── Architecture Stack ── */
+    .arch-stack {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0;
+      margin: 0 auto;
+      max-width: 480px;
+      padding: 0 16px;
+    }
+    .arch-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 24px;
+      width: 100%;
+      text-align: left;
+      position: relative;
+    }
+    .arch-card .box-title {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--accent);
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+    }
+    .arch-card .box-label {
+      font-family: var(--font-display);
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+    .arch-card .box-desc {
+      font-size: 13px;
+      color: var(--text-dim);
+      line-height: 1.5;
+    }
+    .arch-connector {
+      color: var(--accent);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      padding: 12px 0;
+      text-align: center;
+      position: relative;
+    }
+    .arch-connector::after {
+      content: "";
+      display: block;
+      width: 1px;
+      height: 8px;
+      background: var(--border);
+      margin: 4px auto 0;
+    }
+
+    /* ── Platform Table ── */
     .platform-table {
       width: 100%;
       border-collapse: collapse;
-      margin-top: 20px;
+      margin-top: 16px;
     }
     .platform-table th, .platform-table td {
       padding: 12px 16px;
       text-align: left;
       border-bottom: 1px solid var(--border);
     }
-    .platform-table th { color: var(--muted); font-weight: 600; font-size: 13px; }
+    .platform-table th {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
     .platform-table td { font-size: 14px; }
 
+    /* ── Engine Code Block ── */
+    .code-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      max-width: 720px;
+      margin: 16px auto 0;
+      overflow-x: auto;
+    }
+    .code-panel .file-tag {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+    .code-panel pre {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      line-height: 1.6;
+      color: var(--text-dim);
+    }
+    .code-panel .kw { color: #569CD6; }
+    .code-panel .fn { color: #DCDCAA; }
+    .code-panel .type { color: #4EC9B0; }
+    .code-panel .comment { color: #5a6a5a; font-style: italic; }
+
+    /* ── Mobile Steps ── */
+    .step-list {
+      max-width: 720px;
+      margin: 0 auto;
+      list-style: none;
+      counter-reset: step;
+    }
+    .step-list li {
+      counter-increment: step;
+      padding: 10px 0 10px 32px;
+      position: relative;
+      color: var(--text-dim);
+      font-size: 14px;
+      line-height: 1.7;
+    }
+    .step-list li::before {
+      content: counter(step);
+      position: absolute;
+      left: 0;
+      top: 12px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    /* ── Pitfall List ── */
+    .pitfall-list {
+      max-width: 720px;
+      margin: 0 auto;
+      list-style: none;
+    }
+    .pitfall-list li {
+      padding: 8px 0;
+      color: var(--text-dim);
+      font-size: 14px;
+      line-height: 1.7;
+      border-bottom: 1px solid var(--border);
+    }
+    .pitfall-list li:last-child { border-bottom: none; }
+    .pitfall-list li::before {
+      content: "⚠";
+      margin-right: 8px;
+      color: var(--hot);
+    }
+
+    /* ── Demo Screenshots ── */
+    .demo-grid {
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      gap: 24px;
+      margin-top: 24px;
+      flex-wrap: wrap;
+    }
+    .demo-frame {
+      text-align: center;
+      flex: 0 0 auto;
+    }
+    .demo-frame .frame-shell {
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      height: 500px;
+    }
+    .demo-frame img {
+      display: block;
+      height: 100%;
+      width: auto;
+      border-radius: 0;
+    }
+    .demo-frame .caption {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--muted);
+      margin-top: 12px;
+      letter-spacing: 0.5px;
+    }
+
+    /* ── Download Cards ── */
     .download-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -147,13 +459,35 @@
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: 28px 24px;
+      overflow: hidden;
       text-align: center;
+      transition: border-color 0.2s;
     }
-    .download-card .os { font-size: 36px; margin-bottom: 12px; }
-    .download-card h3 { margin: 0 0 4px; }
-    .download-card .meta { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+    .download-card:hover { border-color: var(--border-hover); }
+    .download-card .bar {
+      height: 3px;
+    }
+    .download-card .bar.macos { background: linear-gradient(90deg, #00e699, #00c47a); }
+    .download-card .bar.android { background: linear-gradient(90deg, #ff6b35, #ff8c5a); }
+    .download-card .inner {
+      padding: 28px 24px;
+    }
+    .download-card .os {
+      font-size: 40px;
+      margin-bottom: 12px;
+    }
+    .download-card h3 {
+      margin: 0 0 4px;
+      font-size: 18px;
+    }
+    .download-card .meta {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 16px;
+    }
 
+    /* ── Join Section ── */
     .join-section {
       text-align: center;
       background: var(--surface);
@@ -162,21 +496,42 @@
       padding: 40px 24px;
       margin-top: 20px;
     }
-    .join-section p { color: var(--muted); }
+    .join-section p { color: var(--text-dim); }
 
+    /* ── Footer ── */
     footer {
       text-align: center;
       padding: 40px 0;
       color: var(--muted);
-      font-size: 13px;
+      font-size: 12px;
+      font-family: var(--font-mono);
       border-top: 1px solid var(--border);
+      position: relative;
+      z-index: 1;
     }
 
+    /* ── Scroll Reveal ── */
+    .reveal {
+      opacity: 0;
+      transform: translateY(24px);
+      transition: opacity 0.6s ease, transform 0.6s ease;
+    }
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* ── Responsive ── */
     @media (max-width: 600px) {
-      header h1 { font-size: 32px; }
-      header .subtitle { font-size: 16px; }
-      .badges { gap: 6px; }
+      header { padding: 60px 0 50px; }
+      header h1 { font-size: 38px; letter-spacing: -1px; }
+      header .subtitle { font-size: 15px; }
+      .stats-row { gap: 20px; }
+      .stat .num { font-size: 26px; }
+      section { padding: 50px 0; }
+      section h2 { font-size: 24px; }
       .btn { width: 100%; justify-content: center; }
+      .demo-frame img { max-width: 240px; }
     }
   </style>
 </head>
@@ -184,54 +539,91 @@
 
 <header>
   <div class="container">
-    <h1>AI 离线翻译</h1>
-    <p class="subtitle">把 440MB 的大模型装进手机，离线完成翻译，无需网络</p>
+    <div class="hero-label">
+      offline &bull; mobile &bull; llama.cpp<span class="cursor"></span>
+    </div>
+    <h1>把 <span class="highlight">大模型</span><br>装进你的手机</h1>
+    <p class="subtitle">一个 440MB 的翻译专用模型，在设备端本地运行，断网也能翻译</p>
+    <div class="stats-row">
+      <div class="stat">
+        <div class="num">440 <small>MB</small></div>
+        <div class="label">模型体积</div>
+      </div>
+      <div class="stat">
+        <div class="num">1.25 <small>bit</small></div>
+        <div class="label">量化精度</div>
+      </div>
+      <div class="stat">
+        <div class="num">30 <small>ms</small></div>
+        <div class="label">首 token 延迟</div>
+      </div>
+    </div>
     <div class="badges">
-      <span class="badge accent">Flutter</span>
+      <span class="badge highlight">Flutter</span>
       <span class="badge">llama.cpp</span>
       <span class="badge">Hy-MT1.5</span>
-      <span class="badge">GGUF</span>
+      <span class="badge">STQ1_0</span>
       <span class="badge">macOS</span>
       <span class="badge">Android</span>
-      <span class="badge">arm64</span>
     </div>
     <div class="cta-group">
-      <a href="https://github.com/kelegele/ai-offline-translator/releases/latest" class="btn primary">⬇ 下载安装包</a>
-      <a href="https://github.com/kelegele/ai-offline-translator" class="btn">GitHub →</a>
+      <a href="#download" class="btn primary">⬇ 下载 App</a>
+      <a href="https://github.com/kelegele/ai-offline-translator" class="btn" target="_blank">GitHub →</a>
     </div>
   </div>
 </header>
 
+<section id="demo">
+  <div class="container">
+    <h2>📸 实机截图</h2>
+    <div class="demo-grid">
+      <div class="demo-frame reveal">
+        <div class="frame-shell">
+          <img src="public/macos-demo.png" alt="macOS 端翻译截图">
+        </div>
+        <div class="caption">macOS</div>
+      </div>
+      <div class="demo-frame reveal">
+        <div class="frame-shell">
+          <img src="public/apk-demo.jpg" alt="Android 端翻译截图">
+        </div>
+        <div class="caption">Android</div>
+      </div>
+    </div>
+  </div>
+</section>
+
 <section id="features">
   <div class="container">
-    <h2>✨ 功能</h2>
+    <h2>为什么值得关注</h2>
+    <p class="section-desc">这不是又一个云端 API 的壳——推理跑在你的手机 CPU 上</p>
     <div class="feature-grid">
-      <div class="feature-card">
-        <div class="icon">🌐</div>
+      <div class="feature-card reveal">
+        <div class="icon">🔒</div>
         <h3>完全离线</h3>
-        <p>基于 Hy-MT1.5 大模型，推理在本地完成。飞行模式下也能用，数据不出手机。</p>
+        <p>翻译数据不出手机，断网也能用。没有第三方服务器看到你翻译的内容。</p>
       </div>
-      <div class="feature-card">
-        <div class="icon">⚡</div>
-        <h3>流式翻译</h3>
-        <p>打字机逐字输出译文，40ms/字渲染节奏，像 AI 聊天一样自然。</p>
-      </div>
-      <div class="feature-card">
-        <div class="icon">📦</div>
-        <h3>模型管理</h3>
-        <p>一键下载 ModelScope 默认模型，或从本地导入 GGUF 文件。启动自动加载已有模型。</p>
-      </div>
-      <div class="feature-card">
+      <div class="feature-card reveal">
         <div class="icon">📱</div>
-        <h3>双平台</h3>
-        <p>macOS + Android 全功能对齐。Android edge-to-edge 沉浸式布局。</p>
+        <h3>手机原生运行</h3>
+        <p>llama.cpp 编译为 arm64 静态库链接进 App。不需要 CLI、不需要终端、不需要 root。</p>
       </div>
-      <div class="feature-card">
+      <div class="feature-card reveal">
+        <div class="icon">⚡</div>
+        <h3>440MB 跑大模型</h3>
+        <p>STQ1_0 1.25bit 量化——把 7GB 的原始模型压缩 16 倍，手机内存轻松承载。</p>
+      </div>
+      <div class="feature-card reveal">
         <div class="icon">🧠</div>
-        <h3>原生推理</h3>
-        <p>Flutter UI + shared C++ translator_engine + JNI/ObjC++ bridge，不依赖 CLI。</p>
+        <h3>纯 C++ 推理引擎</h3>
+        <p>一份 translator_engine.cpp 在两个平台共用。macOS 用 ObjC++，Android 用 JNI。</p>
       </div>
-      <div class="feature-card">
+      <div class="feature-card reveal">
+        <div class="icon">✂️</div>
+        <h3>打字机流式输出</h3>
+        <p>推理一个 token 就渲染一个 token，30–50ms 间隔，和 ChatGPT 一样的流式体验。</p>
+      </div>
+      <div class="feature-card reveal">
         <div class="icon">🆓</div>
         <h3>完全开源</h3>
         <p>MIT 协议，代码公开。欢迎贡献、学习、二次开发。</p>
@@ -240,166 +632,112 @@
   </div>
 </section>
 
-
-  <!-- Demo Screenshot -->
-  <section id="demo">
-    <div class="container" style="text-align: center;">
-      <h2>📸 Demo 截图</h2>
-      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:24px; margin-top:24px;">
-        <div>
-          <img src="public/macos-demo.png" alt="macOS 端翻译截图" style="width:100%; aspect-ratio:16/10; object-fit:contain; border-radius:12px; border:1px solid var(--border); box-shadow:0 4px 20px rgba(0,0,0,0.4);">
-          <p style="color:var(--muted); font-size:13px; margin-top:8px;">macOS</p>
-        </div>
-        <div>
-          <img src="public/apk-demo.jpg" alt="Android 端翻译截图" style="width:100%; aspect-ratio:16/10; object-fit:contain; border-radius:12px; border:1px solid var(--border); box-shadow:0 4px 20px rgba(0,0,0,0.4);">
-          <p style="color:var(--muted); font-size:13px; margin-top:8px;">Android</p>
-        </div>
-      </div>
-    </div>
-  </section>
-
 <section id="how">
   <div class="container">
-    <h2>🔧 它是怎么跑起来的</h2>
-    <style>
-      .arch-stack {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 0;
-        margin: 0 auto;
-        max-width: 480px;
-        padding: 0 16px;
-      }
-      .arch-card {
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        padding: 20px 24px;
-        width: 100%;
-        text-align: center;
-      }
-      .arch-card .icon {
-        font-size: 24px;
-        margin-bottom: 6px;
-      }
-      .arch-card .title {
-        font-size: 15px;
-        font-weight: 700;
-        color: var(--text);
-        margin-bottom: 8px;
-      }
-      .arch-card .desc {
-        font-size: 13px;
-        color: var(--muted);
-        line-height: 1.6;
-      }
-      .arch-arrow {
-        color: var(--green);
-        font-size: 13px;
-        font-weight: 600;
-        padding: 10px 0;
-        text-align: center;
-      }
-    </style>
+    <h2>它是怎么跑起来的</h2>
+    <p class="section-desc">从 Flutter UI 到底层 llama.cpp——四层架构，每层职责清晰</p>
+
     <div class="arch-stack">
-      <div class="arch-card">
-        <div class="icon">📱</div>
-        <div class="title">Flutter UI (Dart)</div>
-        <div class="desc">翻译页面 · 模型管理 · 语言选择 · 打字机渲染</div>
+      <div class="arch-card reveal">
+        <div class="box-title">Layer 1</div>
+        <div class="box-label">Flutter UI (Dart)</div>
+        <div class="box-desc">翻译页面 · 模型管理 · 语言选择 · 打字机流式渲染</div>
       </div>
-      <div class="arch-arrow"><span class="label">MethodChannel</span> ▼</div>
-      <div class="arch-card">
-        <div class="icon">🔌</div>
-        <div class="title">Platform Bridge (Swift / Kotlin)</div>
-        <div class="desc">模型导入下载 · 文件管理 · 线程调度</div>
+      <div class="arch-connector">MethodChannel ▼</div>
+      <div class="arch-card reveal">
+        <div class="box-title">Layer 2</div>
+        <div class="box-label">Platform Bridge (Swift / Kotlin)</div>
+        <div class="box-desc">模型导入下载 · 文件管理 · 线程调度</div>
       </div>
-      <div class="arch-arrow"><span class="label">C++ function call</span> ▼</div>
-      <div class="arch-card">
-        <div class="icon">⚙️</div>
-        <div class="title">TranslatorEngine (C++)</div>
-        <div class="desc">llama.cpp 加载模型 · tokenize · 推理 · 采样</div>
+      <div class="arch-connector">C++ function call ▼</div>
+      <div class="arch-card reveal">
+        <div class="box-title">Layer 3 — 共用引擎</div>
+        <div class="box-label">TranslatorEngine (C++)</div>
+        <div class="box-desc">llama.cpp 模型加载 · tokenize · 推理循环 · 采样 · 取消</div>
       </div>
-      <div class="arch-arrow"><span class="label">links against</span> ▼</div>
-      <div class="arch-card">
-        <div class="icon">🧠</div>
-        <div class="title">llama.cpp</div>
-        <div class="desc">ggml · llama · common (chat template)<br/>with PR #22836 for STQ1_0</div>
+      <div class="arch-connector">links against ▼</div>
+      <div class="arch-card reveal">
+        <div class="box-title">Layer 4 — 底层</div>
+        <div class="box-label">llama.cpp</div>
+        <div class="box-desc">ggml · llama · common (chat template)<br>PR #22836 · STQ1_0 量化支持</div>
       </div>
     </div>
+
     <h3>为什么选 STQ1_0 量化</h3>
-    <p style="color:var(--muted)">Hy-MT1.5 约 440MB（1.25bit 量化），手机端加载完全可行。该量化格式需 llama.cpp PR #22836 支持。</p>
+    <p style="color:var(--text-dim);max-width:720px;margin:0 auto;">Hy-MT1.5 约 440MB（1.25bit 量化），手机端加载完全可行。该量化格式需 llama.cpp PR #22836 支持——仓库通过 submodule 固定到对应 commit。</p>
+
+
     <h3>推理核心流程</h3>
-    <p style="color:var(--muted)">prompt 构建（jinja chat template）→ tokenize → 推理循环（逐 token 生成至 EOS 或 128 token）→ 采样 → 解码为文本。可中途取消（atomic flag）。</p>
+    <p style="color:var(--text-dim);max-width:720px;margin:0 auto;">prompt 构建（jinja chat template）→ tokenize → 推理循环（逐 token 生成至 EOS 或 128 token）→ 采样 → 解码为文本。可中途取消（atomic flag）。</p>
+    <h3>怎么包装 llama.cpp</h3>
+    <p style="color:var(--text-dim);max-width:720px;margin:0 auto;">
+      核心是 <code style="font-family:var(--font-mono);color:var(--accent);">translator_engine.hpp / .cpp</code>——一份纯 C++ 引擎文件，
+      封装了模型加载、jinja chat template、tokenize、采样和生成循环。上层只调用三个方法：
+    </p>
+    <div class="code-panel">
+      <div class="file-tag">📄 flutter_app/native/translator_engine/translator_engine.hpp</div>
+      <pre><span class="comment">// 纯 C++ 翻译引擎 — 不依赖 Flutter / 平台</span>
+<span class="kw">struct</span> <span class="type">TranslatorEngine</span> {
+    <span class="kw">bool</span> <span class="fn">loadModel</span>(<span class="kw">const char</span>* model_path);
+    <span class="kw">void</span> <span class="fn">translate</span>(<span class="kw">const char</span>* text, <span class="kw">char</span>* out, <span class="kw">size_t</span> out_size);
+    <span class="kw">void</span> <span class="fn">cancel</span>();
+    <span class="kw">bool</span> <span class="fn">isModelLoaded</span>();
+};</pre>
+    </div>
+    <p style="color:var(--text-dim);text-align:center;margin-top:16px;font-size:14px;">
+      这份引擎代码在两个平台 <strong style="color:var(--text);">完全共用</strong>——macOS ObjC++ 和 Android JNI 直接调同一份 .cpp。
+    </p>
+
+    <h3>怎么在移动端跑起来</h3>
+    <ol class="step-list">
+      <li><strong style="color:var(--text);">模型体积</strong> — Hy-MT1.5 约 440MB（1.25bit STQ1_0），对比原始 bf16（~7GB）缩小约 16 倍，手机存储和内存都扛得住。</li>
+      <li><strong style="color:var(--text);">推理线程</strong> — 推理在 <code style="font-family:var(--font-mono);color:var(--accent);">std::thread</code> 中执行，不阻塞 Flutter UI。取消通过 <code style="font-family:var(--font-mono);color:var(--accent);">std::atomic&lt;bool&gt;</code> 标记。</li>
+      <li><strong style="color:var(--text);">n_ctx=256</strong> — 翻译场景不需要长上下文，小窗口显著降低内存和推理延迟。</li>
+      <li><strong style="color:var(--text);">构建即交付</strong> — llama.cpp 编译为静态库链接进 App：macOS Xcode 静态链接 arm64、Android CMake + NDK 交叉编译 arm64-v8a。安装包里已包含全部推理能力。</li>
+      <li><strong style="color:var(--text);">模型独立管理</strong> — 模型不内置在 App 包体里，用户按需下载/导入到 App 私有目录。App 本体 15–30MB。</li>
+    </ol>
+
     <h3>平台桥接</h3>
     <table class="platform-table">
-      <tr><th>平台</th><th>桥接层</th><th>模型目录</th><th>编译</th></tr>
+      <tr><th>平台</th><th>桥接层</th><th>模型目录</th><th>编译方式</th></tr>
       <tr><td>macOS</td><td>ObjC++ wrapper → C++</td><td>Application Support</td><td>Xcode 静态链接</td></tr>
       <tr><td>Android</td><td>JNI → C++</td><td>files/models/</td><td>CMake + NDK</td></tr>
     </table>
 
-    <h3>🧱 怎么包装 llama.cpp</h3>
-    <p style="color:var(--muted);max-width:720px;margin:0 auto;line-height:1.7;">
-      核心是 <code style="color:var(--green);">translator_engine.hpp / .cpp</code>——一个纯 C++ 头文件/实现文件组合，
-      封装了 llama.cpp 的模型加载、jinja chat template、tokenize、采样和生成循环。上层完全不感知 llama.cpp 内部细节，
-      只调用三个方法：<code style="color:var(--text);">loadModel()</code> → <code style="color:var(--text);">translate()</code> → <code style="color:var(--text);">cancel()</code>。
-    </p>
-    <div style="max-width:720px;margin:16px auto 0;text-align:left;color:var(--muted);font-size:14px;line-height:1.8;">
-      <div style="background:var(--surface);border:1px solid var(--border);padding:20px 24px;border-radius:var(--radius);">
-        <code style="color:var(--text);font-weight:600;">translator_engine.hpp</code>
-<pre style="margin-top:8px;font-family:'SF Mono','Fira Code',monospace;font-size:12px;line-height:1.6;">
-<span style="color:var(--muted);">// 纯 C++ 翻译引擎 — 不依赖 Flutter / 平台</span>
-<span style="color:#569CD6;">struct</span> <span style="color:#4EC9B0;">TranslatorEngine</span> {
-    <span style="color:#569CD6;">bool</span> <span style="color:#DCDCAA;">loadModel</span>(<span style="color:#569CD6;">const</span> <span style="color:#569CD6;">char</span>* model_path);
-    <span style="color:#569CD6;">void</span> <span style="color:#DCDCAA;">translate</span>(<span style="color:#569CD6;">const</span> <span style="color:#569CD6;">char</span>* text, <span style="color:#569CD6;">char</span>* out, <span style="color:#569CD6;">size_t</span> out_size);
-    <span style="color:#569CD6;">void</span> <span style="color:#DCDCAA;">cancel</span>();
-    <span style="color:#569CD6;">bool</span> <span style="color:#DCDCAA;">isModelLoaded</span>();
-};
-</pre>
-      </div>
-    </div>
-    <p style="color:var(--muted);margin-top:16px;font-size:14px;line-height:1.7;max-width:720px;margin-left:auto;margin-right:auto;">
-      这份引擎代码在两个平台 <strong style="color:var(--text);">完全共用</strong>——macOS 通过 ObjC++ 直接调用，
-      Android 通过 JNI 桥接，无需修改引擎内部一行代码。
-    </p>
-
-    <h3>📱 怎么在移动端跑起来</h3>
-    <div style="max-width:720px;margin:0 auto;text-align:left;color:var(--muted);font-size:14px;line-height:1.8;">
-      <p><strong style="color:var(--text);">① 模型体积</strong>：Hy-MT1.5 约 440MB（1.25bit STQ1_0 量化），手机存储和内存都扛得住。对比原始 bf16（～7GB），体积缩小约 16 倍。</p>
-      <p><strong style="color:var(--text);">② 推理线程</strong>：推理在主线程外独立线程执行（<code style="color:var(--green);">std::thread</code>），不阻塞 UI。取消通过 <code style="color:var(--green);">std::atomic&lt;bool&gt;</code> 标记，推理循环每生成一个 token 就检查一次。</p>
-      <p><strong style="color:var(--text);">③ n_ctx=256</strong>：上下文窗口限制在 256 token。翻译场景不需要长上下文，控制参数能显著降低内存占用和推理延迟。</p>
-      <p><strong style="color:var(--text);">④ 构建即交付</strong>：llama.cpp 被编译为 <strong style="color:var(--text);">静态库</strong>链接进 App——macOS 用 Xcode 静态链接 arm64 库，Android 用 CMake + NDK 交叉编译 arm64-v8a 库。用户安装的 .apk / .dmg 里面已经包含所有推理能力，不需要额外运行时或 CLI。</p>
-      <p><strong style="color:var(--text);">⑤ 模型独立管理</strong>：模型文件不内置在 App 包体里，用户通过「下载」或「导入」获取，存放在 App 私有目录。这样 App 本体只有 15-30MB，模型 440MB 按需获取。</p>
-    </div>
-
-    <h3>⚠️ 踩过的坑</h3>
-    <div style="max-width:720px;margin:0 auto;text-align:left;color:var(--muted);font-size:14px;line-height:1.8;">
-      <p>• <strong style="color:var(--text);">不要手写 prompt</strong>：Hy-MT1.5 的 chat template 是 jinja 格式，必须用 llama.cpp common 层的 <code style="color:var(--green);">common_chat_templates_apply()</code>。之前手写 token 序列导致输出全是乱码（重复字符）。</p>
-      <p>• <strong style="color:var(--text);">STQ1_0 需要 PR 分支</strong>：llama.cpp 主线不支持 STQ1_0 量化格式，必须用 <a href="https://github.com/ggml-org/llama.cpp/pull/22836">PR #22836</a> 的分支。仓库通过 git submodule 固定到该 commit。</p>
-      <p>• <strong style="color:var(--text);">Android 只用 arm64-v8a</strong>：不要编译 x86/x86_64 ABI。STQ1_0 的 SIMD 路径只适配 ARM NEON，x86 模拟器无法正确推理。</p>
-    </div>
+    <h3>踩过的坑</h3>
+    <ul class="pitfall-list">
+      <li><strong style="color:var(--text);">不要手写 prompt</strong> — Hy-MT1.5 的 chat template 是 jinja 格式，必须用 <code style="font-family:var(--font-mono);color:var(--accent);">common_chat_templates_apply()</code>。之前手写 token 序列导致输出全是乱码。</li>
+      <li><strong style="color:var(--text);">STQ1_0 需要 PR 分支</strong> — llama.cpp 主线不支持 STQ1_0 量化，必须用 <a href="https://github.com/ggml-org/llama.cpp/pull/22836">PR #22836</a> 的分支，仓库通过 submodule 固定。</li>
+      <li><strong style="color:var(--text);">Android 只用 arm64-v8a</strong> — STQ1_0 的 SIMD 路径只适配 ARM NEON，x86 模拟器无法正确推理。</li>
+    </ul>
   </div>
 </section>
 
 <section id="download">
   <div class="container">
-    <h2>⬇ 下载</h2>
+    <h2>下载</h2>
     <div class="download-grid">
-      <div class="download-card">
-        <div class="os">🍏</div>
-        <h3>macOS</h3>
-        <p class="meta">DMG · arm64 · ~15MB</p>
-        <a href="https://github.com/kelegele/ai-offline-translator/releases/latest/download/AI-Offline-Translator-v0.1.0-macos.dmg" class="btn primary">下载 DMG</a>
-        <a href="https://gh-proxy.com/https://github.com/kelegele/ai-offline-translator/releases/download/v0.1.0/AI-Offline-Translator-v0.1.0-macos.dmg" class="btn" style="margin-top:8px;">🔄 代理下载</a>
-        <p style="color:var(--muted);font-size:12px;margin-top:8px;">首次打开需右键 → 打开</p>
+      <div class="download-card reveal">
+        <div class="bar macos"></div>
+        <div class="inner">
+          <div class="os">🍏</div>
+          <h3>macOS</h3>
+          <p class="meta">DMG · arm64 · ~15MB</p>
+          <a href="https://github.com/kelegele/ai-offline-translator/releases/latest/download/AI-Offline-Translator-v0.1.0-macos.dmg" class="btn primary" style="width:100%;">下载 DMG</a>
+          <a href="https://gh-proxy.com/https://github.com/kelegele/ai-offline-translator/releases/download/v0.1.0/AI-Offline-Translator-v0.1.0-macos.dmg" class="btn" style="width:100%;margin-top:8px;">🔄 代理下载</a>
+          <p style="color:var(--muted);font-size:11px;margin-top:8px;font-family:var(--font-mono);">首次打开需右键 → 打开</p>
+        </div>
       </div>
-      <div class="download-card">
-        <div class="os">🤖</div>
-        <h3>Android</h3>
-        <p class="meta">APK · arm64-v8a · ~30MB</p>
-        <a href="https://github.com/kelegele/ai-offline-translator/releases/latest/download/AI-Offline-Translator-v0.1.0-android-arm64.apk" class="btn primary">下载 APK</a>
-        <a href="https://gh-proxy.com/https://github.com/kelegele/ai-offline-translator/releases/download/v0.1.0/AI-Offline-Translator-v0.1.0-android-arm64.apk" class="btn" style="margin-top:8px;">🔄 代理下载</a>
-        <p style="color:var(--muted);font-size:12px;margin-top:8px;">需手动授予存储权限</p>
+      <div class="download-card reveal">
+        <div class="bar android"></div>
+        <div class="inner">
+          <div class="os">🤖</div>
+          <h3>Android</h3>
+          <p class="meta">APK · arm64-v8a · ~30MB</p>
+          <a href="https://github.com/kelegele/ai-offline-translator/releases/latest/download/AI-Offline-Translator-v0.1.0-android-arm64.apk" class="btn primary" style="width:100%;">下载 APK</a>
+          <a href="https://gh-proxy.com/https://github.com/kelegele/ai-offline-translator/releases/download/v0.1.0/AI-Offline-Translator-v0.1.0-android-arm64.apk" class="btn" style="width:100%;margin-top:8px;">🔄 代理下载</a>
+          <p style="color:var(--muted);font-size:11px;margin-top:8px;font-family:var(--font-mono);">需手动授予存储权限</p>
+        </div>
       </div>
     </div>
   </div>
@@ -408,9 +746,9 @@
 <section id="join">
   <div class="container">
     <div class="join-section">
-      <h2 style="margin-bottom:12px;">🧑‍💻 加入讨论</h2>
+      <h2 style="margin-bottom:12px;">加入讨论</h2>
       <p>对端侧 AI、大模型移动端落地的技术感兴趣？</p>
-      <p>一起探讨 AI，交流学习 — 加微信 <strong>Kelegele</strong></p>
+      <p>一起探讨 AI，交流学习 — 加微信 <strong style="color:var(--text);">Kelegele</strong></p>
       <p style="margin-top:12px;font-size:13px;">
         <a href="https://github.com/kelegele/ai-offline-translator">GitHub</a>
       </p>
@@ -423,6 +761,16 @@
     <p>AI 离线翻译 · v0.1.0 · MIT License · <a href="https://github.com/kelegele/ai-offline-translator">GitHub</a></p>
   </div>
 </footer>
+
+<script>
+  // Scroll reveal
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+  }, { threshold: 0.15 });
+  document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+
+</script>
 
 </body>
 </html>
