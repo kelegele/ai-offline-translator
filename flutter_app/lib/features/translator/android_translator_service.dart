@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:file_picker/file_picker.dart';
 
 import 'translator_channel.dart';
@@ -40,7 +42,12 @@ class AndroidTranslatorService implements TranslatorService {
     required int nThreads,
   }) {
     _modelPath = path;
-    return _channel.loadModel(path: path, nCtx: nCtx, nThreads: nThreads);
+    final androidThreads = Platform.numberOfProcessors.clamp(2, 4);
+    return _channel.loadModel(
+      path: path,
+      nCtx: nCtx,
+      nThreads: androidThreads,
+    );
   }
 
   @override
@@ -50,6 +57,20 @@ class AndroidTranslatorService implements TranslatorService {
     required String targetLanguage,
   }) {
     return _channel.translate(
+      text: text,
+      sourceLanguage: sourceLanguage,
+      targetLanguage: targetLanguage,
+      modelPath: _modelPath ?? '',
+    );
+  }
+
+  @override
+  Stream<String> translateStream({
+    required String text,
+    required String sourceLanguage,
+    required String targetLanguage,
+  }) {
+    return _channel.translateStream(
       text: text,
       sourceLanguage: sourceLanguage,
       targetLanguage: targetLanguage,

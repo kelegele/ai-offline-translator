@@ -4,10 +4,13 @@ import android.content.Context
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.os.Process
+import android.util.Log
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
 import java.io.FileInputStream
+import java.net.ProtocolException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.Executors
@@ -22,6 +25,7 @@ class TranslatorChannelHandler(
         private const val DEFAULT_MODEL_URL =
             "https://modelscope.cn/models/AngelSlim/Hy-MT1.5-1.8B-1.25bit-GGUF/resolve/master/Hy-MT1.5-1.8B-STQ1_0.gguf"
         private const val MINIMUM_MODEL_BYTES: Long = 100 * 1024 * 1024
+        private const val ENGINE_TAG = "AITranslatorEngine"
         private val GGUF_MAGIC = byteArrayOf(0x47, 0x47, 0x55, 0x46)
 
         init {
@@ -29,13 +33,23 @@ class TranslatorChannelHandler(
         }
     }
 
+
     private val mainHandler = Handler(Looper.getMainLooper())
     private val downloadExecutor = Executors.newSingleThreadExecutor()
+    private val engineExecutor = Executors.newSingleThreadExecutor { runnable ->
+        Thread {
+            Process.setThreadPriority(Process.THREAD_PRIORITY_FOREGROUND)
+            runnable.run()
+        }.apply { name = "translator-engine" }
+    }
     private var downloadJob: DownloadJob? = null
+    @Volatile
     private var engineLoaded = false
 
     private external fun nativeLoadModel(path: String, nCtx: Int, nThreads: Int): Boolean
     private external fun nativeTranslate(text: String, sourceLang: String, targetLang: String): String
+    private external fun nativeBeginTranslation(text: String, sourceLang: String, targetLang: String)
+    private external fun nativeGenerateNextToken(): String?
     private external fun nativeCancel()
     private external fun nativeUnload()
     private external fun nativeIsLoaded(): Boolean
@@ -49,10 +63,11 @@ class TranslatorChannelHandler(
     )
 
     fun register(flutterEngine: FlutterEngine) {
-        MethodChannel(
+        val methodChannel = MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             CHANNEL_NAME,
-        ).setMethodCallHandler { call, res ->
+        )
+        methodChannel.setMethodCallHandler { call, res ->
             when (call.method) {
                 "pickModelFile" -> pickModelFile(res)
                 "importModelFile" -> importModelFile(res)
@@ -64,6 +79,8 @@ class TranslatorChannelHandler(
                 "findLocalModel" -> findLocalModel(res)
                 "loadModel" -> handleLoadModel(call.arguments, res)
                 "translate" -> handleTranslate(call.arguments, res)
+                "beginTranslation" -> handleBeginTranslation(call.arguments, res)
+                "generateNextToken" -> handleGenerateNextToken(res)
                 "cancel" -> handleCancel(res)
                 "unloadModel" -> handleUnload(res)
                 "getModelStatus" -> handleGetModelStatus(res)
@@ -71,6 +88,7 @@ class TranslatorChannelHandler(
             }
         }
     }
+
 
     // --- Model directory ---
 
@@ -281,18 +299,39 @@ class TranslatorChannelHandler(
             return
         }
 
-        try {
-            val ok = nativeLoadModel(path, nCtx, nThreads)
-            if (ok) {
-                engineLoaded = true
-                result.success(null)
-            } else {
-                result.error("load_failed", "模型加载失败", null)
+        val requestStartedAt = System.currentTimeMillis()
+        engineExecutor.execute {
+            val nativeStartedAt = System.currentTimeMillis()
+            Log.i(
+                ENGINE_TAG,
+                "loadModel queued=${nativeStartedAt - requestStartedAt}ms",
+            )
+            try {
+                val ok = nativeLoadModel(path, nCtx, nThreads)
+                val nativeFinishedAt = System.currentTimeMillis()
+                Log.i(
+                    ENGINE_TAG,
+                    "loadModel native=${nativeFinishedAt - nativeStartedAt}ms ok=$ok",
+                )
+                mainHandler.post {
+                    if (ok) {
+                        engineLoaded = true
+                        result.success(null)
+                    } else {
+                        result.error("load_failed", "模型加载失败", null)
+                    }
+                }
+            } catch (e: UnsatisfiedLinkError) {
+                // Fallback: JNI not available yet
+                mainHandler.post {
+                    engineLoaded = true
+                    result.success(null)
+                }
+            } catch (e: Exception) {
+                mainHandler.post {
+                    result.error("load_failed", e.message ?: "模型加载失败", null)
+                }
             }
-        } catch (e: UnsatisfiedLinkError) {
-            // Fallback: JNI not available yet
-            engineLoaded = true
-            result.success(null)
         }
     }
 
@@ -310,11 +349,77 @@ class TranslatorChannelHandler(
             return
         }
 
-        try {
-            val translated = nativeTranslate(text, sourceLanguage, targetLanguage)
-            result.success(translated)
-        } catch (e: UnsatisfiedLinkError) {
-            result.success("[$targetLanguage] $text")
+        val requestStartedAt = System.currentTimeMillis()
+        engineExecutor.execute {
+            val nativeStartedAt = System.currentTimeMillis()
+            Log.i(
+                ENGINE_TAG,
+                "translate queued=${nativeStartedAt - requestStartedAt}ms chars=${text.length}",
+            )
+            try {
+                val translated = nativeTranslate(text, sourceLanguage, targetLanguage)
+                val nativeFinishedAt = System.currentTimeMillis()
+                Log.i(
+                    ENGINE_TAG,
+                    "translate native=${nativeFinishedAt - nativeStartedAt}ms outputChars=${translated.length}",
+                )
+                mainHandler.post {
+                    result.success(translated)
+                }
+            } catch (e: UnsatisfiedLinkError) {
+                mainHandler.post {
+                    result.success("[$targetLanguage] $text")
+                }
+            } catch (e: Exception) {
+                mainHandler.post {
+                    result.error("translate_failed", e.message ?: "翻译失败", null)
+                }
+            }
+        }
+    }
+
+    private fun handleBeginTranslation(args: Any?, result: MethodChannel.Result) {
+        Log.i(ENGINE_TAG, "beginTranslation called")
+        val map = args as? Map<String, Any> ?: run {
+            result.error("bad_args", "缺少翻译参数", null)
+            return
+        }
+        val text = map["text"] as? String ?: ""
+        val sourceLanguage = map["sourceLanguage"] as? String ?: "英语"
+        val targetLanguage = map["targetLanguage"] as? String ?: "中文"
+
+        if (!engineLoaded) {
+            result.error("translate_failed", "模型未加载", null)
+            return
+        }
+
+        engineExecutor.execute {
+            try {
+                Log.i(ENGINE_TAG, "beginTranslation text=$text chars=${text.length}")
+                nativeBeginTranslation(text, sourceLanguage, targetLanguage)
+                Log.i(ENGINE_TAG, "beginTranslation done")
+                mainHandler.post { result.success(null) }
+            } catch (e: Exception) {
+                mainHandler.post {
+                    result.error("translate_failed", e.message ?: "翻译启动失败", null)
+                }
+            }
+        }
+    }
+
+    private fun handleGenerateNextToken(result: MethodChannel.Result) {
+        var tokenCount = 0
+        engineExecutor.execute {
+            try {
+                val piece = nativeGenerateNextToken()
+                tokenCount++
+                if (tokenCount <= 5) Log.i(ENGINE_TAG, "generateNextToken #$tokenCount piece=${piece?.take(20)}")
+                mainHandler.post { result.success(piece) }
+            } catch (e: Exception) {
+                mainHandler.post {
+                    result.error("translate_failed", e.message ?: "token 生成失败", null)
+                }
+            }
         }
     }
 
@@ -326,11 +431,15 @@ class TranslatorChannelHandler(
     }
 
     private fun handleUnload(result: MethodChannel.Result) {
-        try {
-            nativeUnload()
-        } catch (_: UnsatisfiedLinkError) {}
-        engineLoaded = false
-        result.success(null)
+        engineExecutor.execute {
+            try {
+                nativeUnload()
+            } catch (_: UnsatisfiedLinkError) {}
+            mainHandler.post {
+                engineLoaded = false
+                result.success(null)
+            }
+        }
     }
 
     private fun handleGetModelStatus(result: MethodChannel.Result) {
@@ -363,11 +472,10 @@ private class DownloadJob(
 
     fun run() {
         isRunning = true
+        var connection: HttpURLConnection? = null
         try {
-            val connection = URL(url).openConnection() as HttpURLConnection
-            connection.connectTimeout = 30_000
-            connection.readTimeout = 60_000
-            connection.connect()
+            onProgress(0L, 0L, "正在解析下载地址")
+            connection = openDownloadConnection(url)
 
             val totalBytes = connection.contentLengthLong
             onProgress(0L, totalBytes, "正在下载模型")
@@ -420,12 +528,62 @@ private class DownloadJob(
 
             onComplete(destFile.absolutePath)
         } catch (e: Exception) {
+            Log.e("AITranslatorDownload", "Model download failed", e)
             tempFile.delete()
-            onError("模型下载失败：${e.message}")
+            onError("模型下载失败：${e.message ?: e.javaClass.simpleName}")
         } finally {
+            connection?.disconnect()
             isRunning = false
         }
     }
 
     fun cancel() { cancelled = true }
+
+    private fun openDownloadConnection(rawUrl: String): HttpURLConnection {
+        var currentUrl = rawUrl
+        repeat(6) { redirectCount ->
+            if (cancelled) throw InterruptedException("下载已取消")
+
+            val connection = (URL(currentUrl).openConnection() as HttpURLConnection).apply {
+                instanceFollowRedirects = false
+                connectTimeout = 15_000
+                readTimeout = 30_000
+                requestMethod = "GET"
+                setRequestProperty("Accept", "application/octet-stream,*/*")
+                setRequestProperty("Accept-Encoding", "identity")
+                setRequestProperty("Connection", "close")
+                setRequestProperty(
+                    "User-Agent",
+                    "AI-Offline-Translator/1.0 Android Model Downloader",
+                )
+            }
+
+            val host = URL(currentUrl).host
+            onProgress(0L, 0L, "正在连接 $host")
+            val responseCode = connection.responseCode
+
+            if (responseCode in 300..399) {
+                val location = connection.getHeaderField("Location")
+                connection.disconnect()
+                if (location.isNullOrBlank()) {
+                    throw ProtocolException("下载地址跳转缺少 Location")
+                }
+                currentUrl = URL(URL(currentUrl), location).toString()
+                onProgress(0L, 0L, "正在跳转下载源 ${redirectCount + 1}")
+                return@repeat
+            }
+
+            if (responseCode != HttpURLConnection.HTTP_OK &&
+                responseCode != HttpURLConnection.HTTP_PARTIAL
+            ) {
+                val message = connection.responseMessage ?: "HTTP $responseCode"
+                connection.disconnect()
+                throw ProtocolException("下载源响应异常：$responseCode $message")
+            }
+
+            return connection
+        }
+
+        throw ProtocolException("下载地址跳转次数过多")
+    }
 }

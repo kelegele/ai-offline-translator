@@ -28,6 +28,19 @@ class DelayedTranslatorService implements TranslatorService {
   }
 
   @override
+  Stream<String> translateStream({
+    required String text,
+    required String sourceLanguage,
+    required String targetLanguage,
+  }) async* {
+    yield await translate(
+      text: text,
+      sourceLanguage: sourceLanguage,
+      targetLanguage: targetLanguage,
+    );
+  }
+
+  @override
   Future<void> cancel() async {}
 
   @override
@@ -54,6 +67,19 @@ class ThrowingTranslatorService implements TranslatorService {
     required String targetLanguage,
   }) {
     throw StateError('原生翻译桥接不可用');
+  }
+
+  @override
+  Stream<String> translateStream({
+    required String text,
+    required String sourceLanguage,
+    required String targetLanguage,
+  }) async* {
+    yield await translate(
+      text: text,
+      sourceLanguage: sourceLanguage,
+      targetLanguage: targetLanguage,
+    );
   }
 
   @override
@@ -94,6 +120,19 @@ class RecordingTranslatorService implements TranslatorService {
   }
 
   @override
+  Stream<String> translateStream({
+    required String text,
+    required String sourceLanguage,
+    required String targetLanguage,
+  }) async* {
+    yield await translate(
+      text: text,
+      sourceLanguage: sourceLanguage,
+      targetLanguage: targetLanguage,
+    );
+  }
+
+  @override
   Future<void> cancel() async {
     cancelCount += 1;
   }
@@ -106,6 +145,49 @@ class RecordingTranslatorService implements TranslatorService {
 
   @override
   Future<String> getModelStatus() async => modelStatus;
+}
+
+class StreamingTranslatorService implements TranslatorService {
+  final StreamController<String> chunks = StreamController<String>();
+  final Completer<void> completion = Completer<void>();
+  String? loadedPath;
+
+  @override
+  Future<void> loadModel({
+    required String path,
+    required int nCtx,
+    required int nThreads,
+  }) async {
+    loadedPath = path;
+  }
+
+  @override
+  Future<String> translate({
+    required String text,
+    required String sourceLanguage,
+    required String targetLanguage,
+  }) async {
+    await completion.future;
+    return '你好';
+  }
+
+  @override
+  Stream<String> translateStream({
+    required String text,
+    required String sourceLanguage,
+    required String targetLanguage,
+  }) {
+    return chunks.stream;
+  }
+
+  @override
+  Future<void> cancel() async {}
+
+  @override
+  Future<void> unloadModel() async {}
+
+  @override
+  Future<String> getModelStatus() async => '本地模型已就绪';
 }
 
 void main() {
@@ -140,6 +222,28 @@ void main() {
 
     expect(controller.state.status, TranslatorStatus.completed);
     expect(controller.state.inputText, 'Hello');
+    expect(controller.state.outputText, '你好');
+  });
+
+  test('streaming translation updates output before completion', () async {
+    final service = StreamingTranslatorService();
+    final controller = TranslatorController(service: service);
+    controller.selectModel('/tmp/Hy-MT1.5-1.8B-STQ1_0.gguf');
+    await controller.loadSelectedModel();
+
+    final translation = controller.translate('Hello');
+    service.chunks.add('你');
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+
+    expect(controller.state.status, TranslatorStatus.translating);
+    expect(controller.state.outputText, '你');
+
+    service.chunks.add('好');
+    await service.chunks.close();
+    service.completion.complete();
+    await translation;
+
+    expect(controller.state.status, TranslatorStatus.completed);
     expect(controller.state.outputText, '你好');
   });
 

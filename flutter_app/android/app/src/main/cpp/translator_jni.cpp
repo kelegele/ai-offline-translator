@@ -60,6 +60,56 @@ Java_com_kelegele_ai_1offline_1translator_TranslatorChannelHandler_nativeTransla
   return env->NewStringUTF(result.text.c_str());
 }
 
+JNIEXPORT jstring JNICALL
+Java_com_kelegele_ai_1offline_1translator_TranslatorChannelHandler_nativeBeginTranslation(
+    JNIEnv* env, jobject /* this */, jstring text, jstring source_lang, jstring target_lang) {
+  if (!g_engine || !g_engine->is_loaded()) {
+    jclass exception_class = env->FindClass("java/lang/IllegalStateException");
+    env->ThrowNew(exception_class, "模型未加载");
+    return nullptr;
+  }
+
+  const char* text_str = env->GetStringUTFChars(text, nullptr);
+  const char* src_str = env->GetStringUTFChars(source_lang, nullptr);
+  const char* tgt_str = env->GetStringUTFChars(target_lang, nullptr);
+
+  auto result = g_engine->begin_translation(
+      std::string(text_str),
+      std::string(src_str),
+      std::string(tgt_str));
+
+  env->ReleaseStringUTFChars(text, text_str);
+  env->ReleaseStringUTFChars(source_lang, src_str);
+  env->ReleaseStringUTFChars(target_lang, tgt_str);
+
+  if (!result.error.empty()) {
+    jclass exception_class = env->FindClass("java/lang/RuntimeException");
+    env->ThrowNew(exception_class, result.error.c_str());
+    return nullptr;
+  }
+
+  return nullptr;
+}
+
+JNIEXPORT jstring JNICALL
+Java_com_kelegele_ai_1offline_1translator_TranslatorChannelHandler_nativeGenerateNextToken(
+    JNIEnv* env, jobject /* this */) {
+  if (!g_engine || !g_engine->is_loaded()) {
+    return nullptr;
+  }
+
+  auto token = g_engine->generate_next_token();
+  if (!token.error.empty()) {
+    jclass exception_class = env->FindClass("java/lang/RuntimeException");
+    env->ThrowNew(exception_class, token.error.c_str());
+    return nullptr;
+  }
+  if (token.done || token.cancelled) {
+    return nullptr;
+  }
+  return env->NewStringUTF(token.piece.c_str());
+}
+
 JNIEXPORT void JNICALL
 Java_com_kelegele_ai_1offline_1translator_TranslatorChannelHandler_nativeCancel(
     JNIEnv* env, jobject /* this */) {

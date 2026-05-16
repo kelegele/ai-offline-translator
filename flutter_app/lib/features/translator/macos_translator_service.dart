@@ -36,6 +36,20 @@ class MacosTranslatorService implements TranslatorService {
   }
 
   @override
+  Stream<String> translateStream({
+    required String text,
+    required String sourceLanguage,
+    required String targetLanguage,
+  }) {
+    return _channel.translateStream(
+      text: text,
+      sourceLanguage: sourceLanguage,
+      targetLanguage: targetLanguage,
+      modelPath: _modelPath ?? '',
+    );
+  }
+
+  @override
   Future<void> cancel() {
     return _channel.cancel();
   }

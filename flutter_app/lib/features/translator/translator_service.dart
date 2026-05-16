@@ -17,6 +17,12 @@ abstract interface class TranslatorService {
     required String targetLanguage,
   });
 
+  Stream<String> translateStream({
+    required String text,
+    required String sourceLanguage,
+    required String targetLanguage,
+  });
+
   Future<void> cancel();
 
   Future<void> unloadModel();
@@ -48,6 +54,19 @@ class MockTranslatorService implements TranslatorService {
     }
 
     return '[$targetLanguage] ${text.trim()}';
+  }
+
+  @override
+  Stream<String> translateStream({
+    required String text,
+    required String sourceLanguage,
+    required String targetLanguage,
+  }) async* {
+    yield await translate(
+      text: text,
+      sourceLanguage: sourceLanguage,
+      targetLanguage: targetLanguage,
+    );
   }
 
   @override
@@ -162,6 +181,19 @@ class LlamaCliTranslatorService implements TranslatorService {
         _activeProcess = null;
       }
     }
+  }
+
+  @override
+  Stream<String> translateStream({
+    required String text,
+    required String sourceLanguage,
+    required String targetLanguage,
+  }) async* {
+    yield await translate(
+      text: text,
+      sourceLanguage: sourceLanguage,
+      targetLanguage: targetLanguage,
+    );
   }
 
   @override

@@ -73,6 +73,17 @@ final class TranslatorChannelHandler: NSObject {
         return
       }
       translateNative(text: text, sourceLanguage: sourceLanguage, targetLanguage: targetLanguage, result: result)
+    case "beginTranslation":
+      guard let args = call.arguments as? [String: Any],
+            let text = args["text"] as? String,
+            let sourceLanguage = args["sourceLanguage"] as? String,
+            let targetLanguage = args["targetLanguage"] as? String else {
+        result(FlutterError(code: "bad_args", message: "缺少翻译参数", details: nil))
+        return
+      }
+      handleBeginTranslation(text: text, sourceLanguage: sourceLanguage, targetLanguage: targetLanguage, result: result)
+    case "generateNextToken":
+      handleGenerateNextToken(result: result)
     case "cancel":
       bridge.cancel()
       result(nil)
@@ -98,6 +109,24 @@ final class TranslatorChannelHandler: NSObject {
       }
       result(translated ?? "")
     }
+  }
+
+  private func handleBeginTranslation(text: String, sourceLanguage: String, targetLanguage: String, result: @escaping FlutterResult) {
+    if !bridge.isLoaded {
+      result(FlutterError(code: "translate_failed", message: "模型未加载", details: nil))
+      return
+    }
+    var error: NSString?
+    if bridge.beginTranslation(text, sourceLanguage: sourceLanguage, targetLanguage: targetLanguage, error: &error) {
+      result(nil)
+    } else {
+      result(FlutterError(code: "translate_failed", message: error as String? ?? "翻译启动失败", details: nil))
+    }
+  }
+
+  private func handleGenerateNextToken(result: @escaping FlutterResult) {
+    let piece = bridge.generateNextToken()
+    result(piece)
   }
 
   private func pickModelFile(result: @escaping FlutterResult) {
@@ -379,3 +408,4 @@ extension TranslatorChannelHandler: URLSessionDownloadDelegate {
     }
   }
 }
+

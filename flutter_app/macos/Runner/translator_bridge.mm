@@ -72,6 +72,38 @@
   });
 }
 
+- (BOOL)beginTranslation:(NSString*)text sourceLanguage:(NSString*)source targetLanguage:(NSString*)target error:(NSString**)outError {
+  auto result = self->_engine->begin_translation(
+      std::string([text UTF8String]),
+      std::string([source UTF8String]),
+      std::string([target UTF8String]));
+  if (!result.error.empty()) {
+    if (outError) {
+      *outError = [NSString stringWithUTF8String:result.error.c_str()];
+    }
+    return NO;
+  }
+  return YES;
+}
+
+- (NSString*)generateNextToken {
+  auto token = self->_engine->generate_next_token();
+  if (!token.error.empty()) {
+    return [NSString stringWithUTF8String:token.error.c_str()];
+  }
+  if (token.done || token.cancelled) {
+    return nil;
+  }
+  if (token.piece.empty()) {
+    return nil;
+  }
+  return [NSString stringWithUTF8String:token.piece.c_str()];
+}
+
+- (NSString*)generationOutputText {
+  return [NSString stringWithUTF8String:self->_engine->generation_output_text().c_str()];
+}
+
 - (void)cancel {
   _engine->cancel();
 }

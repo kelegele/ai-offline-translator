@@ -77,6 +77,26 @@ class TranslatorChannel {
     return result ?? '';
   }
 
+  Stream<String> translateStream({
+    required String text,
+    required String sourceLanguage,
+    required String targetLanguage,
+    required String modelPath,
+  }) async* {
+    await _channel.invokeMethod<void>('beginTranslation', {
+      'text': text,
+      'sourceLanguage': sourceLanguage,
+      'targetLanguage': targetLanguage,
+      'modelPath': modelPath,
+    });
+
+    while (true) {
+      final chunk = await _channel.invokeMethod<String>('generateNextToken');
+      if (chunk == null) break;
+      if (chunk.isNotEmpty) yield chunk;
+    }
+  }
+
   Future<void> cancel() async {
     await _channel.invokeMethod<void>('cancel');
   }

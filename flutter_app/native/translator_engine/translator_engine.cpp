@@ -10,6 +10,31 @@
 static const int N_PREDICT = 128;
 static const int TIMEOUT_SECONDS = 60;
 
+static bool is_complete_utf8(const std::string& text) {
+  int expected_continuation = 0;
+  for (unsigned char byte : text) {
+    if (expected_continuation == 0) {
+      if ((byte & 0x80) == 0) {
+        continue;
+      } else if ((byte & 0xE0) == 0xC0) {
+        expected_continuation = 1;
+      } else if ((byte & 0xF0) == 0xE0) {
+        expected_continuation = 2;
+      } else if ((byte & 0xF8) == 0xF0) {
+        expected_continuation = 3;
+      } else {
+        return false;
+      }
+    } else {
+      if ((byte & 0xC0) != 0x80) {
+        return false;
+      }
+      expected_continuation -= 1;
+    }
+  }
+  return expected_continuation == 0;
+}
+
 TranslatorEngine::TranslatorEngine() = default;
 TranslatorEngine::~TranslatorEngine() { unload(); }
 
@@ -29,7 +54,7 @@ bool TranslatorEngine::load(const TranslatorEngineConfig& config) {
   ctx_params.n_ctx = config.n_ctx;
   ctx_params.n_batch = config.n_ctx;
   ctx_params.n_threads = config.n_threads;
-  ctx_params.n_threads_batch = 1;
+  ctx_params.n_threads_batch = config.n_threads;
 
   auto* ctx = llama_init_from_model(model, ctx_params);
   if (!ctx) {
@@ -55,6 +80,7 @@ bool TranslatorEngine::load(const TranslatorEngineConfig& config) {
 
 void TranslatorEngine::unload() {
   cancelled_.store(true);
+  finish_generation();
   if (chat_templates_) {
     common_chat_templates_free(chat_templates_);
     chat_templates_ = nullptr;
@@ -69,15 +95,51 @@ bool TranslatorEngine::is_loaded() const { return loaded_.load(); }
 TranslatorEngineResult TranslatorEngine::translate(const std::string& text,
                                                     const std::string& source_lang,
                                                     const std::string& target_lang) {
+  return translate(text, source_lang, target_lang, {});
+}
+
+TranslatorEngineResult TranslatorEngine::translate(
+    const std::string& text,
+    const std::string& source_lang,
+    const std::string& target_lang,
+    const std::function<void(const std::string&)>& on_token) {
+  auto result = begin_translation(text, source_lang, target_lang);
+  if (!result.error.empty()) { return result; }
+
+  while (true) {
+    auto token = generate_next_token();
+    if (!token.error.empty()) {
+      result.error = token.error;
+      break;
+    }
+    if (token.cancelled) {
+      result.cancelled = true;
+      break;
+    }
+    if (!token.piece.empty() && on_token) {
+      on_token(token.piece);
+    }
+    if (token.done) { break; }
+  }
+
+  result.text = generation_output_text_;
+  return result;
+}
+
+TranslatorEngineResult TranslatorEngine::begin_translation(
+    const std::string& text,
+    const std::string& source_lang,
+    const std::string& target_lang) {
   TranslatorEngineResult result;
   if (!loaded_.load()) {
     result.error = "模型未加载";
     return result;
   }
 
+  finish_generation();
   cancelled_.store(false);
   auto* ctx = static_cast<llama_context*>(ctx_);
-
+  auto* model = static_cast<llama_model*>(model_);
   std::string user_msg = build_prompt(text, source_lang, target_lang);
 
   common_chat_templates_inputs inputs;
@@ -97,17 +159,6 @@ TranslatorEngineResult TranslatorEngine::translate(const std::string& text,
     return result;
   }
 
-  return do_generate();
-}
-
-TranslatorEngineResult TranslatorEngine::do_generate() {
-  TranslatorEngineResult result;
-  auto* model = static_cast<llama_model*>(model_);
-  auto* ctx = static_cast<llama_context*>(ctx_);
-  const auto* vocab = llama_model_get_vocab(model);
-  auto start = std::chrono::steady_clock::now();
-  std::string output_text;
-
   llama_memory_clear(llama_get_memory(ctx), true);
 
   common_params_sampling sampling_params;
@@ -124,46 +175,147 @@ TranslatorEngineResult TranslatorEngine::do_generate() {
     return result;
   }
 
-  auto tokens = pending_tokens_;
-  int n_past = 0;
-  bool tokens_are_prompt = true;
+  sampler_ = smpl;
+  generation_tokens_ = pending_tokens_;
+  generation_n_past_ = 0;
+  generation_tokens_are_prompt_ = true;
+  generation_remaining_tokens_ = N_PREDICT;
+  generation_output_text_.clear();
+  generation_stream_buffer_.clear();
+  generation_started_at_ = std::chrono::steady_clock::now();
+  generation_active_ = true;
+  return result;
+}
 
-  for (int i = 0; i < N_PREDICT; ++i) {
-    if (cancelled_.load()) {
+TranslatorEngineToken TranslatorEngine::generate_next_token() {
+  TranslatorEngineToken token_result;
+  if (!generation_active_) {
+    token_result.done = true;
+    return token_result;
+  }
+
+  auto* model = static_cast<llama_model*>(model_);
+  auto* ctx = static_cast<llama_context*>(ctx_);
+  auto* smpl = static_cast<common_sampler*>(sampler_);
+  const auto* vocab = llama_model_get_vocab(model);
+
+  if (cancelled_.load()) {
+    token_result.cancelled = true;
+    token_result.done = true;
+    finish_generation();
+    return token_result;
+  }
+
+  auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
+      std::chrono::steady_clock::now() - generation_started_at_).count();
+  if (elapsed > TIMEOUT_SECONDS) {
+    token_result.error = "推理超时";
+    token_result.done = true;
+    finish_generation();
+    return token_result;
+  }
+
+  if (generation_remaining_tokens_ <= 0) {
+    if (!generation_stream_buffer_.empty() && is_complete_utf8(generation_stream_buffer_)) {
+      token_result.piece = generation_stream_buffer_;
+      generation_stream_buffer_.clear();
+      token_result.done = true;
+      finish_generation();
+      return token_result;
+    }
+    token_result.done = true;
+    finish_generation();
+    return token_result;
+  }
+
+  if (generation_tokens_are_prompt_) {
+    for (llama_token prompt_token : generation_tokens_) {
+      common_sampler_accept(smpl, prompt_token, false);
+    }
+    generation_tokens_are_prompt_ = false;
+  }
+
+  if (!common_prompt_batch_decode(
+          ctx,
+          generation_tokens_,
+          generation_n_past_,
+          config_.n_ctx,
+          "",
+          false)) {
+    token_result.error = "decode error";
+    token_result.done = true;
+    finish_generation();
+    return token_result;
+  }
+
+  llama_token new_token = common_sampler_sample(smpl, ctx, -1);
+  common_sampler_accept(smpl, new_token, true);
+  generation_remaining_tokens_ -= 1;
+
+  if (llama_vocab_is_eog(vocab, new_token)) {
+    if (!generation_stream_buffer_.empty() && is_complete_utf8(generation_stream_buffer_)) {
+      token_result.piece = generation_stream_buffer_;
+      generation_stream_buffer_.clear();
+      token_result.done = true;
+      finish_generation();
+      return token_result;
+    }
+    token_result.done = true;
+    finish_generation();
+    return token_result;
+  }
+
+  const std::string piece = common_token_to_piece(vocab, new_token, false);
+  generation_output_text_ += piece;
+  generation_tokens_ = {new_token};
+
+  if (!piece.empty()) {
+    generation_stream_buffer_ += piece;
+    if (is_complete_utf8(generation_stream_buffer_)) {
+      token_result.piece = generation_stream_buffer_;
+      generation_stream_buffer_.clear();
+    }
+  }
+  return token_result;
+}
+
+std::string TranslatorEngine::generation_output_text() const {
+  return generation_output_text_;
+}
+
+TranslatorEngineResult TranslatorEngine::do_generate(
+    const std::function<void(const std::string&)>& on_token) {
+  TranslatorEngineResult result;
+  while (true) {
+    auto token = generate_next_token();
+    if (!token.error.empty()) {
+      result.error = token.error;
+      break;
+    }
+    if (token.cancelled) {
       result.cancelled = true;
       break;
     }
-    auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
-        std::chrono::steady_clock::now() - start).count();
-    if (elapsed > TIMEOUT_SECONDS) {
-      result.error = "推理超时";
-      break;
+    if (!token.piece.empty() && on_token) {
+      on_token(token.piece);
     }
-
-    if (tokens_are_prompt) {
-      for (llama_token token : tokens) {
-        common_sampler_accept(smpl, token, false);
-      }
-      tokens_are_prompt = false;
-    }
-
-    if (!common_prompt_batch_decode(ctx, tokens, n_past, config_.n_ctx, "", false)) {
-      result.error = "decode error";
-      break;
-    }
-
-    llama_token new_token = common_sampler_sample(smpl, ctx, -1);
-    common_sampler_accept(smpl, new_token, true);
-    if (llama_vocab_is_eog(vocab, new_token)) { break; }
-
-    output_text += common_token_to_piece(vocab, new_token, false);
-
-    tokens = {new_token};
+    if (token.done) { break; }
   }
-
-  common_sampler_free(smpl);
-  result.text = output_text;
+  result.text = generation_output_text_;
   return result;
+}
+
+void TranslatorEngine::finish_generation() {
+  if (sampler_) {
+    common_sampler_free(static_cast<common_sampler*>(sampler_));
+    sampler_ = nullptr;
+  }
+  generation_active_ = false;
+  generation_tokens_are_prompt_ = false;
+  generation_n_past_ = 0;
+  generation_remaining_tokens_ = 0;
+  generation_tokens_.clear();
+  generation_stream_buffer_.clear();
 }
 
 void TranslatorEngine::cancel() { cancelled_.store(true); }

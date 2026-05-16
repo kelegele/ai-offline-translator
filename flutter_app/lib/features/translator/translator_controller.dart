@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io' show FileSystemException, Platform;
 
 import 'package:flutter/foundation.dart';
@@ -175,7 +176,7 @@ class TranslatorController extends ChangeNotifier {
         clearError: true,
       );
     } on Object catch (error) {
-      final message = _messageFor(error);
+      final message = messageFor(error);
       _state = _state.copyWith(
         status: TranslatorStatus.error,
         runtimeStatus: '模型加载失败',
@@ -222,17 +223,42 @@ class TranslatorController extends ChangeNotifier {
     final requestToken = ++_requestToken;
 
     try {
-      final output = await _service.translate(
+      final outputBuffer = StringBuffer();
+      Timer? flushTimer;
+
+      void flushOutput() {
+        flushTimer?.cancel();
+        flushTimer = null;
+        if (requestToken != _requestToken) return;
+        _state = _state.copyWith(outputText: outputBuffer.toString());
+        notifyListeners();
+      }
+
+      void scheduleFlush() {
+        if (flushTimer != null) return;
+        flushTimer = Timer(const Duration(milliseconds: 80), flushOutput);
+      }
+
+      await for (final chunk in _service.translateStream(
         text: trimmed,
         sourceLanguage: _state.sourceLanguage,
         targetLanguage: _state.targetLanguage,
-      );
+      )) {
+        if (requestToken != _requestToken) {
+          flushTimer?.cancel();
+          return;
+        }
+        outputBuffer.write(chunk);
+        scheduleFlush();
+      }
+      flushOutput();
+
       if (requestToken != _requestToken) {
         return;
       }
       _state = _state.copyWith(
         status: TranslatorStatus.completed,
-        outputText: output,
+        outputText: outputBuffer.toString(),
         clearError: true,
       );
     } on Object catch (error) {
@@ -241,11 +267,13 @@ class TranslatorController extends ChangeNotifier {
       }
       _state = _state.copyWith(
         status: TranslatorStatus.error,
-        errorMessage: _messageFor(error),
+        errorMessage: messageFor(error),
+        clearError: true,
       );
     }
     notifyListeners();
   }
+
 
   Future<void> cancel() async {
     _requestToken++;
@@ -255,36 +283,15 @@ class TranslatorController extends ChangeNotifier {
   }
 
   Future<void> unloadModel() async {
-    _requestToken++;
-    _state = _state.copyWith(
-      runtimeStatus: '正在卸载模型',
-      modelState: _state.modelState.copyWith(
-        status: ModelLifecycleStatus.unloading,
-      ),
-    );
-    notifyListeners();
     await _service.unloadModel();
     _state = _state.copyWith(
-      status: TranslatorStatus.idle,
-      runtimeStatus: '未加载模型',
       modelState: const ModelSelectionState(),
-      outputText: '',
-      clearError: true,
+      runtimeStatus: "未加载模型",
     );
     notifyListeners();
   }
 
-  void clear() {
-    _state = TranslatorState(
-      sourceLanguage: _state.sourceLanguage,
-      targetLanguage: _state.targetLanguage,
-      runtimeStatus: _state.runtimeStatus,
-      modelState: _state.modelState,
-    );
-    notifyListeners();
-  }
-
-  String _messageFor(Object error) {
+  String messageFor(Object error) {
     if (error is StateError) {
       return error.message;
     }

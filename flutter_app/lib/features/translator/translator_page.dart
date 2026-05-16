@@ -68,8 +68,6 @@ class _TranslatorPageState extends State<TranslatorPage> {
     return RegExp(r'[\w\u4e00-\u9fff\u3400-\u4dbf]').allMatches(text).length;
   }
 
-  bool get _isMobile => Platform.isAndroid || Platform.isIOS;
-
   // --- Model sheet (stays open during import) ---
 
   void _showModelSheet() {
@@ -86,13 +84,15 @@ class _TranslatorPageState extends State<TranslatorPage> {
         onDownload: () {
           _downloadDefaultModel();
         },
-        onLoad: () {
-          Navigator.pop(sheetContext);
-          _controller.loadSelectedModel();
+        onLoad: () async {
+          await _controller.loadSelectedModel();
+          if (!sheetContext.mounted) return;
+          if (_controller.state.modelState.isReady) {
+            Navigator.pop(sheetContext);
+          }
         },
-        onUnload: () {
-          Navigator.pop(sheetContext);
-          _controller.unloadModel();
+        onUnload: () async {
+          await _controller.unloadModel();
         },
         onCancelDownload: () {
           _cancelModelDownload();
@@ -236,6 +236,8 @@ class _TranslatorPageState extends State<TranslatorPage> {
                           child: _InputPanel(
                             controller: _textController,
                             characterCount: _characterCount,
+                            enabled:
+                                state.status != TranslatorStatus.translating,
                             onChanged: _controller.updateInput,
                           ),
                         ),
@@ -308,6 +310,10 @@ class _TranslatorPageState extends State<TranslatorPage> {
     }
 
     final topPadding = MediaQuery.of(context).padding.top;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final capsuleMaxWidth = screenWidth < 380
+        ? 124.0
+        : (screenWidth < 480 ? 156.0 : 220.0);
 
     return Container(
       padding: EdgeInsets.fromLTRB(16, 8 + topPadding, 16, 8),
@@ -317,60 +323,87 @@ class _TranslatorPageState extends State<TranslatorPage> {
       ),
       child: Row(
         children: [
-          Text(
-            'AI离线翻译',
-            style: Theme.of(
-              context,
-            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(width: 8),
-          TextButton(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const AboutPage()),
-              );
-            },
-            style: TextButton.styleFrom(
-              foregroundColor: AppColors.steel,
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              minimumSize: Size.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-            child: Text(
-              '了解更多',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          const Spacer(),
-          GestureDetector(
-            onTap: _showModelSheet,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: bgColor,
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (isLoaded) ...[
-                    Icon(Icons.check_circle, size: 14, color: textColor),
-                    const SizedBox(width: 6),
-                  ],
-                  Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: textColor,
+          Expanded(
+            child: Row(
+              children: [
+                Flexible(
+                  child: Text(
+                    'AI离线翻译',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const SizedBox(width: 4),
-                  Icon(Icons.keyboard_arrow_down, size: 16, color: textColor),
-                ],
+                ),
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const AboutPage()),
+                    );
+                  },
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.steel,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: Text(
+                    '了解更多',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: capsuleMaxWidth),
+            child: GestureDetector(
+              onTap: _showModelSheet,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: bgColor,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (isLoaded) ...[
+                      Icon(Icons.check_circle, size: 14, color: textColor),
+                      const SizedBox(width: 6),
+                    ],
+                    Flexible(
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: textColor,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.keyboard_arrow_down,
+                      size: 16,
+                      color: textColor,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -514,10 +547,11 @@ class _LangBar extends StatelessWidget {
                       ? Icon(Icons.check, size: 20, color: AppColors.brandBlue)
                       : null,
                   onTap: () {
-                    if (isSource)
+                    if (isSource) {
                       onSourceChanged(lang);
-                    else
+                    } else {
                       onTargetChanged(lang);
+                    }
                     Navigator.pop(ctx);
                   },
                 ),
@@ -572,10 +606,12 @@ class _InputPanel extends StatefulWidget {
   const _InputPanel({
     required this.controller,
     required this.characterCount,
+    required this.enabled,
     required this.onChanged,
   });
   final TextEditingController controller;
   final int characterCount;
+  final bool enabled;
   final ValueChanged<String> onChanged;
 
   @override
@@ -623,6 +659,7 @@ class _InputPanelState extends State<_InputPanel> {
             minLines: null,
             maxLines: null,
             textInputAction: TextInputAction.newline,
+            enabled: widget.enabled,
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(height: 1.6),
             textAlignVertical: TextAlignVertical.top,
             decoration: InputDecoration(
@@ -631,6 +668,7 @@ class _InputPanelState extends State<_InputPanel> {
               border: InputBorder.none,
               contentPadding: const EdgeInsets.fromLTRB(14, 12, 44, 28),
             ),
+            inputFormatters: const [_MeaningfulCharacterLimitFormatter(200)],
             onChanged: widget.onChanged,
           ),
           // Character count — bottom-right corner
@@ -645,7 +683,7 @@ class _InputPanelState extends State<_InputPanel> {
             ),
           ),
           // Clear button — top-right corner (after TextField in Stack for z-order)
-          if (hasText)
+          if (hasText && widget.enabled)
             Positioned(
               top: 8,
               right: 6,
@@ -669,19 +707,182 @@ class _InputPanelState extends State<_InputPanel> {
   }
 }
 
+class _MeaningfulCharacterLimitFormatter extends TextInputFormatter {
+  const _MeaningfulCharacterLimitFormatter(this.maxLength);
+
+  final int maxLength;
+
+  static final RegExp _countedCharacterPattern = RegExp(
+    r'[\w\u4e00-\u9fff\u3400-\u4dbf]',
+  );
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    if (_countMeaningfulCharacters(newValue.text) <= maxLength) {
+      return newValue;
+    }
+
+    final limitedText = _limitMeaningfulCharacters(newValue.text);
+    return TextEditingValue(
+      text: limitedText,
+      selection: TextSelection.collapsed(offset: limitedText.length),
+    );
+  }
+
+  static int _countMeaningfulCharacters(String text) {
+    return _countedCharacterPattern.allMatches(text).length;
+  }
+
+  String _limitMeaningfulCharacters(String text) {
+    final buffer = StringBuffer();
+    var count = 0;
+
+    for (final rune in text.runes) {
+      final character = String.fromCharCode(rune);
+      final isCounted = _countedCharacterPattern.hasMatch(character);
+      if (isCounted) {
+        if (count >= maxLength) continue;
+        count += 1;
+      }
+      buffer.write(character);
+    }
+
+    return buffer.toString();
+  }
+}
+
 // --- Output panel ---
 
-class _OutputPanel extends StatelessWidget {
+class _OutputPanel extends StatefulWidget {
   const _OutputPanel({required this.state});
   final TranslatorState state;
 
   @override
+  State<_OutputPanel> createState() => _OutputPanelState();
+}
+
+class _OutputPanelState extends State<_OutputPanel> {
+  String _displayedText = '';
+  Timer? _typewriterTimer;
+  int _charIndex = 0;
+  String _lastSourceText = '';
+  TranslatorStatus? _lastStatus;
+
+  static const int _charDelayMs = 40;
+
+  @override
+  void didUpdateWidget(covariant _OutputPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final status = widget.state.status;
+    final outputText = widget.state.outputText;
+
+    // Reset when a new translation starts
+    if (status == TranslatorStatus.translating &&
+        _lastStatus != TranslatorStatus.translating) {
+      _displayedText = '';
+      _charIndex = 0;
+      _lastSourceText = outputText;
+      _stopTypewriter();
+    }
+
+    // Typewriter during translating
+    if (status == TranslatorStatus.translating && outputText.isNotEmpty) {
+      _lastSourceText = outputText;
+      _ensureTypewriter();
+    }
+
+    // On completed, show everything immediately
+    if (status == TranslatorStatus.completed &&
+        _lastStatus != TranslatorStatus.completed) {
+      _stopTypewriter();
+      _displayedText = outputText;
+      _charIndex = outputText.length;
+    }
+
+    // Reset on idle/error/cancelled/ready
+    if (status != TranslatorStatus.translating &&
+        status != TranslatorStatus.completed) {
+      _stopTypewriter();
+      if (_lastStatus == TranslatorStatus.translating ||
+          _lastStatus == TranslatorStatus.completed) {
+        _displayedText = '';
+        _charIndex = 0;
+      }
+    }
+
+    _lastStatus = status;
+    if (mounted) setState(() {});
+  }
+
+  void _ensureTypewriter() {
+    if (_typewriterTimer != null) return;
+    void tick() {
+      if (!mounted) { _stopTypewriter(); return; }
+      if (_charIndex < _lastSourceText.length) {
+        _charIndex++;
+        setState(() {
+          _displayedText = _lastSourceText.substring(0, _charIndex);
+        });
+        _typewriterTimer = Timer(
+          const Duration(milliseconds: _charDelayMs),
+          tick,
+        );
+      } else {
+        _typewriterTimer = null;
+      }
+    }
+    tick();
+  }
+
+  void _stopTypewriter() {
+    _typewriterTimer?.cancel();
+    _typewriterTimer = null;
+  }
+
+  @override
+  void dispose() {
+    _stopTypewriter();
+    super.dispose();
+  }
+
+  bool get _isPlaceholder {
+    return switch (widget.state.status) {
+      TranslatorStatus.idle => true,
+      TranslatorStatus.ready => true,
+      TranslatorStatus.cancelled => true,
+      _ => false,
+    };
+  }
+
+  String get _content {
+    final status = widget.state.status;
+    if (status == TranslatorStatus.translating) {
+      return _displayedText.isEmpty ? '' : _displayedText;
+    }
+    if (status == TranslatorStatus.completed) {
+      return _displayedText;
+    }
+    return switch (status) {
+      TranslatorStatus.idle => '译文将在这里显示',
+      TranslatorStatus.ready =>
+        widget.state.modelState.isReady ? '已就绪，可以翻译。' : '请先加载模型。',
+      TranslatorStatus.cancelled => '翻译已取消。',
+      TranslatorStatus.error => widget.state.errorMessage ?? '发生错误。',
+      _ => '',
+    };
+  }
+
+  @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
-    final content = _contentForState();
-    final contentColor = state.status == TranslatorStatus.error
+    final content = _content;
+    final contentColor = widget.state.status == TranslatorStatus.error
         ? AppColors.errorText
         : AppColors.ink;
+    final isTranslating = widget.state.status == TranslatorStatus.translating;
 
     return Container(
       width: double.infinity,
@@ -703,12 +904,33 @@ class _OutputPanel extends StatelessWidget {
                 ),
               ),
               const Spacer(),
-              if (state.status == TranslatorStatus.completed)
+              if (isTranslating)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.primary.withValues(alpha: 0.6),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      '翻译中',
+                      style: textTheme.bodySmall?.copyWith(
+                        color: AppColors.muted,
+                      ),
+                    ),
+                  ],
+                ),
+              if (widget.state.status == TranslatorStatus.completed)
                 SizedBox(
                   height: 28,
                   child: IconButton(
                     onPressed: () {
-                      Clipboard.setData(ClipboardData(text: state.outputText));
+                      Clipboard.setData(ClipboardData(text: widget.state.outputText));
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
                           content: Text('已复制译文'),
@@ -744,31 +966,7 @@ class _OutputPanel extends StatelessWidget {
       ),
     );
   }
-
-  bool get _isPlaceholder {
-    return switch (state.status) {
-      TranslatorStatus.idle => true,
-      TranslatorStatus.ready => true,
-      TranslatorStatus.cancelled => true,
-      _ => false,
-    };
-  }
-
-  String _contentForState() {
-    return switch (state.status) {
-      TranslatorStatus.idle => '译文将在这里显示',
-      TranslatorStatus.ready =>
-        state.modelState.isReady ? '已就绪，可以翻译。' : '请先加载模型。',
-      TranslatorStatus.translating => '正在翻译…',
-      TranslatorStatus.completed => state.outputText,
-      TranslatorStatus.cancelled => '翻译已取消。',
-      TranslatorStatus.error => state.errorMessage ?? '发生错误。',
-    };
-  }
 }
-
-
-// --- Model bottom sheet ---
 
 class _ModelSheet extends StatefulWidget {
   const _ModelSheet({
@@ -783,8 +981,8 @@ class _ModelSheet extends StatefulWidget {
   final TranslatorController controller;
   final VoidCallback onImport;
   final VoidCallback onDownload;
-  final VoidCallback onLoad;
-  final VoidCallback onUnload;
+  final Future<void> Function() onLoad;
+  final Future<void> Function() onUnload;
   final VoidCallback onCancelDownload;
 
   @override
@@ -912,13 +1110,13 @@ class _ModelSheetState extends State<_ModelSheet> {
                 ),
               if (hasSelection && !isLoaded)
                 FilledButton.icon(
-                  onPressed: isLoading ? null : widget.onLoad,
+                  onPressed: isLoading ? null : () => widget.onLoad(),
                   icon: const Icon(Icons.bolt, size: 18),
                   label: const Text('加载'),
                 ),
               if (isLoaded)
                 OutlinedButton.icon(
-                  onPressed: isLoading ? null : widget.onUnload,
+                  onPressed: isLoading ? null : () => widget.onUnload(),
                   icon: const Icon(Icons.delete_outline, size: 18),
                   label: const Text('卸载'),
                 ),
