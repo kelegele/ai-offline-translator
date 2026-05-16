@@ -13,6 +13,7 @@ import 'model_selection_state.dart';
 import 'translator_channel.dart';
 import 'translator_controller.dart';
 import 'translator_state.dart';
+import '../about/about_page.dart';
 
 class TranslatorPage extends StatefulWidget {
   const TranslatorPage({super.key});
@@ -320,6 +321,27 @@ class _TranslatorPageState extends State<TranslatorPage> {
             style: Theme.of(
               context,
             ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(width: 8),
+          TextButton(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AboutPage()),
+              );
+            },
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.steel,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: Text(
+              '了解更多',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ),
           const Spacer(),
           GestureDetector(
@@ -684,9 +706,17 @@ class _OutputPanel extends StatelessWidget {
                 SizedBox(
                   height: 28,
                   child: IconButton(
-                    onPressed: () => Clipboard.setData(
-                      ClipboardData(text: state.outputText),
-                    ),
+                    onPressed: () {
+                      Clipboard.setData(ClipboardData(text: state.outputText));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('已复制译文'),
+                          duration: Duration(seconds: 1),
+                          behavior: SnackBarBehavior.floating,
+                          margin: EdgeInsets.only(bottom: 80, left: 40, right: 40),
+                        ),
+                      );
+                    },
                     icon: const Icon(Icons.copy, size: 16),
                     color: AppColors.steel,
                     padding: EdgeInsets.zero,
