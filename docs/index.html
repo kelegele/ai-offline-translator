@@ -285,15 +285,19 @@
     <h2>🔧 它是怎么跑起来的</h2>
     <div class="arch-diagram" style="background:transparent;border:none;padding:20px 0;">
       <pre class="mermaid">
+%%{init: {'theme':'dark', 'themeVariables': {'fontFamily':'-apple-system,BlinkMacSystemFont,sans-serif'}, 'flowchart': {'nodeSpacing': 60, 'rankSpacing': 50}}}%%
 flowchart TD
-    Flutter["📱 Flutter UI (Dart)<br/>翻译页面 / 模型管理 / 语言选择 / 打字机渲染"]
-    Bridge["🔌 Platform Bridge (Swift / Kotlin)<br/>模型导入下载 / 文件管理 / 线程调度"]
-    Engine["⚙️ TranslatorEngine (C++)<br/>llama.cpp 加载模型 / tokenize / 推理 / 采样"]
-    Llama["🧠 llama.cpp<br/>ggml / llama / common (chat template)<br/>with PR #22836 for STQ1_0"]
+    Flutter["📱<br/>Flutter UI<br/>Dart<br/>翻译页面 · 模型管理<br/>语言选择 · 打字机渲染"]
+    Bridge["🔌<br/>Platform Bridge<br/>Swift / Kotlin<br/>模型导入下载 · 文件管理<br/>线程调度"]
+    Engine["⚙️<br/>TranslatorEngine<br/>C++<br/>llama.cpp 加载模型<br/>tokenize · 推理 · 采样"]
+    Llama["🧠<br/>llama.cpp<br/>ggml · llama · common<br/>chat template 解析<br/>PR #22836 · STQ1_0"]
 
     Flutter -->|"MethodChannel"| Bridge
     Bridge -->|"C++ function call"| Engine
     Engine -->|"links against"| Llama
+
+    classDef archBox fill:#1a1a1a,stroke:#2a2a2a,color:#e8e8e8,rx:12,ry:12
+    class Flutter,Bridge,Engine,Llama archBox
       </pre>
     </div>
     <h3>为什么选 STQ1_0 量化</h3>
