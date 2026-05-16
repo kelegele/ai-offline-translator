@@ -1,6 +1,60 @@
 # Changelog
 
+## v0.1.0 - 2026-05-16
+
+### 重要里程碑
+
+v0.1.0 是首个双平台（macOS + Android）功能完整可用的版本，支持：
+- GGUF 模型流式翻译，打字机逐字渲染效果
+- 模型下载（ModelScope）、导入、自动检测和加载
+- macOS DMG 分发 + Android APK 分发
+
+### Added
+
+- 流式翻译与打字机渲染：每 40ms 输出一个 token，营造「打字感」。
+- Android 端 JNI 翻译桥接，通过 `translator_engine` 直接调用 llama.cpp。
+- Android 端 ModelScope 模型下载器，支持进度回调、取消、验证。
+- Android 端 GGUF 文件选择器导入，将模型拷贝到 App 私有目录。
+- Android 沉浸式 edge-to-edge 布局，软键盘不压缩页面。
+- 翻译中按钮显示 spinner +「翻译中」状态。
+- 复制按钮纯 icon，仅在翻译完成后显示。
+- 「了解更多」入口直达关于页面，支持复制微信、点击打开 GitHub。
+- App 图标（macOS + Android）和关于页面。
+- macOS DMG 安装引导（Finder 窗口布局 + Applications 快捷方式）。
+- GitHub Release 自动化发布流程文档。
+- `docs/PRD.md`：产品需求文档，记录跨端功能对齐要求。
+
+### Changed
+
+- 打字机延迟从 400ms/字 调整为 40ms/字（30-50ms/token 标准）。
+- 模型看板不再支持手填路径，仅支持导入或下载。
+- 翻译按钮移至原文与译文之间，全宽。
+- 禁用态按钮颜色对齐设计规范。
+- App 名称统一为「AI离线翻译」。
+- Flutter App 版本更新为 `0.1.0+1`。
+
+### Fixed
+
+- `copyWith(clearError: true, errorMessage: msg)` 导致 errorMessage 被清为 null。
+- 模型看板导入后不实时更新模型名。
+- macOS 文件选择器线程调度问题。
+- Flutter assets 图片路径加载。
+- GitHub Release 中文文件名被吞。
+- 重复的「清空」按钮。
+- 原文输入框内容垂直居中对齐问题。
+
+### Verified
+
+- macOS: `flutter run -d macos` 翻译验证通过，打字机流式正常
+- Android: `flutter run -d emulator-5554` 翻译验证通过，流式正常
+- `flutter analyze` 无错误
+- `flutter test` 全部通过（23/23）
+- `flutter build apk --target-platform android-arm64 --release` 构建通过
+- `flutter build macos --release` 构建通过
+
 ## v0.0.3 - 2026-05-16
+
+（已撤回 - 在未验证 Android 端实际运行的情况下错误发布）
 
 ### Added
 
@@ -32,13 +86,6 @@
 - macOS `allowedFileTypes` API 兼容 macOS 10.15（`if #available` 回退）。
 - 翻译中状态按钮禁用样式覆盖激活样式（改用 `AbsorbPointer`）。
 - 模型已加载时「加载」与「卸载」按钮同时显示。
-
-### Verified
-
-- macOS: `flutter run -d macos` 翻译验证通过
-- Android: `flutter run -d emulator-5554` 翻译验证通过
-- `flutter analyze` 无错误
-- `flutter build macos` / `flutter build apk` 构建通过
 
 ## v0.0.2 - 2026-05-16
 

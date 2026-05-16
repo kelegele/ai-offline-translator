@@ -215,3 +215,23 @@ ai-offline-translator/
 ## License
 
 MIT
+
+## 技术路线
+
+本项目最终目标是移动端离线翻译 App，当前阶段支持 macOS + Android。
+
+**iOS 暂不投入**。不上架 App Store 的情况下，iOS 用户只能通过 Xcode 侧载 .ipa 每 7 天重新签名，体验远不如 Android。需要 iOS 时优先上架 App Store 审核路线，或等待欧盟侧载政策变化。
+
+## 当前版本
+
+v0.1.0 - 首个双平台功能完整可用版本。详情见 [CHANGELOG.md](./CHANGELOG.md)。
+
+## 文档索引
+
+- [CHANGELOG.md](./CHANGELOG.md) - 版本变更历史
+- [PRD.md](./docs/PRD.md) - 产品需求文档
+- [DESIGN.md](./DESIGN.md) - UI 视觉设计规范
+- [flutter_mobile_architecture.md](./docs/flutter_mobile_architecture.md) - Flutter 移动端架构设计
+- [llama_pr22836_notes.md](./docs/llama_pr22836_notes.md) - llama.cpp PR #22836 与 STQ1_0 分析
+- [models_inventory.md](./docs/models_inventory.md) - 本机模型清单
+- [decision_record_2026-05-15.md](./docs/decision_record_2026-05-15.md) - 技术决策记录
