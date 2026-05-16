@@ -143,12 +143,33 @@ cd flutter_app
 flutter build macos --release
 # 产物：flutter_app/build/macos/Build/Products/Release/ai_offline_translator.app
 
-# 2. 打包 DMG（带 Applications 快捷方式，用户拖入即可）
-mkdir -p /tmp/dmg-temp
-cp -R flutter_app/build/macos/Build/Products/Release/ai_offline_translator.app /tmp/dmg-temp/
+# 2. 打包 DMG（重命名 app、设置 Finder 窗口大小和图标布局）
+rm -rf /tmp/dmg-temp; mkdir -p /tmp/dmg-temp
+cp -R flutter_app/build/macos/Build/Products/Release/ai_offline_translator.app "/tmp/dmg-temp/AI离线翻译.app"
 ln -sf /Applications /tmp/dmg-temp/Applications
-hdiutil create -volname "AI-Offline-Translator" -srcfolder /tmp/dmg-temp -ov -format UDZO AI-Offline-Translator-v<版本号>-macos.dmg
-rm -rf /tmp/dmg-temp
+hdiutil create -volname "AI-Offline-Translator" -srcfolder /tmp/dmg-temp -ov -format UDRW -fs HFS+ /tmp/ai-translator-raw.dmg
+hdiutil attach /tmp/ai-translator-raw.dmg -readwrite -noverify -noautoopen -quiet
+osascript -e 'tell application "Finder"
+  tell disk "AI-Offline-Translator"
+    open
+    set current view of container window to icon view
+    set toolbar visible of container window to false
+    set statusbar visible of container window to false
+    set the bounds of container window to {260, 180, 740, 500}
+    set viewOptions to the icon view options of container window
+    set arrangement of viewOptions to not arranged
+    set icon size of viewOptions to 80
+    set position of item "AI离线翻译.app" of container window to {160, 180}
+    set position of item "Applications" of container window to {360, 180}
+    close
+    open
+    update without registering applications
+    delay 2
+  end tell
+end tell'
+sync; sleep 2; hdiutil detach "/Volumes/AI-Offline-Translator" -quiet; sleep 2
+hdiutil convert /tmp/ai-translator-raw.dmg -format UDZO -o AI-Offline-Translator-v<版本号>-macos.dmg -ov
+rm -f /tmp/ai-translator-raw.dmg; rm -rf /tmp/dmg-temp
 ```
 
 ### 创建 GitHub Release
