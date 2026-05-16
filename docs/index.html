@@ -125,11 +125,13 @@
     .feature-card p { color: var(--muted); font-size: 14px; }
 
     .arch-diagram {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 32px 24px;
+      display: flex;
+      justify-content: center;
+      padding: 32px 0;
       overflow-x: auto;
+    }
+    .arch-diagram .mermaid {
+      display: inline-block;
       font-family: "SF Mono", "Fira Code", monospace;
       font-size: 13px;
       line-height: 1.8;
@@ -283,7 +285,7 @@
 <section id="how">
   <div class="container">
     <h2>🔧 它是怎么跑起来的</h2>
-    <div class="arch-diagram" style="background:transparent;border:none;padding:20px 0;">
+    <div class="arch-diagram">
       <pre class="mermaid">
 %%{init: {'theme':'dark', 'themeVariables': {'fontFamily':'-apple-system,BlinkMacSystemFont,sans-serif'}, 'flowchart': {'nodeSpacing': 60, 'rankSpacing': 50}}}%%
 flowchart TD
