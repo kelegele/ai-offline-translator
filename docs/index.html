@@ -312,6 +312,47 @@
       <tr><td>macOS</td><td>ObjC++ wrapper → C++</td><td>Application Support</td><td>Xcode 静态链接</td></tr>
       <tr><td>Android</td><td>JNI → C++</td><td>files/models/</td><td>CMake + NDK</td></tr>
     </table>
+
+    <h3>🧱 怎么包装 llama.cpp</h3>
+    <p style="color:var(--muted);max-width:720px;margin:0 auto;line-height:1.7;">
+      核心是 <code style="color:var(--green);">translator_engine.hpp / .cpp</code>——一个纯 C++ 头文件/实现文件组合，
+      封装了 llama.cpp 的模型加载、jinja chat template、tokenize、采样和生成循环。上层完全不感知 llama.cpp 内部细节，
+      只调用三个方法：<code style="color:var(--text);">loadModel()</code> → <code style="color:var(--text);">translate()</code> → <code style="color:var(--text);">cancel()</code>。
+    </p>
+    <div style="max-width:720px;margin:16px auto 0;text-align:left;color:var(--muted);font-size:14px;line-height:1.8;">
+      <div style="background:var(--surface);border:1px solid var(--border);padding:20px 24px;border-radius:var(--radius);">
+        <code style="color:var(--text);font-weight:600;">translator_engine.hpp</code>
+<pre style="margin-top:8px;font-family:'SF Mono','Fira Code',monospace;font-size:12px;line-height:1.6;">
+<span style="color:var(--muted);">// 纯 C++ 翻译引擎 — 不依赖 Flutter / 平台</span>
+<span style="color:#569CD6;">struct</span> <span style="color:#4EC9B0;">TranslatorEngine</span> {
+    <span style="color:#569CD6;">bool</span> <span style="color:#DCDCAA;">loadModel</span>(<span style="color:#569CD6;">const</span> <span style="color:#569CD6;">char</span>* model_path);
+    <span style="color:#569CD6;">void</span> <span style="color:#DCDCAA;">translate</span>(<span style="color:#569CD6;">const</span> <span style="color:#569CD6;">char</span>* text, <span style="color:#569CD6;">char</span>* out, <span style="color:#569CD6;">size_t</span> out_size);
+    <span style="color:#569CD6;">void</span> <span style="color:#DCDCAA;">cancel</span>();
+    <span style="color:#569CD6;">bool</span> <span style="color:#DCDCAA;">isModelLoaded</span>();
+};
+</pre>
+      </div>
+    </div>
+    <p style="color:var(--muted);margin-top:16px;font-size:14px;line-height:1.7;max-width:720px;margin-left:auto;margin-right:auto;">
+      这份引擎代码在两个平台 <strong style="color:var(--text);">完全共用</strong>——macOS 通过 ObjC++ 直接调用，
+      Android 通过 JNI 桥接，无需修改引擎内部一行代码。
+    </p>
+
+    <h3>📱 怎么在移动端跑起来</h3>
+    <div style="max-width:720px;margin:0 auto;text-align:left;color:var(--muted);font-size:14px;line-height:1.8;">
+      <p><strong style="color:var(--text);">① 模型体积</strong>：Hy-MT1.5 约 440MB（1.25bit STQ1_0 量化），手机存储和内存都扛得住。对比原始 bf16（～7GB），体积缩小约 16 倍。</p>
+      <p><strong style="color:var(--text);">② 推理线程</strong>：推理在主线程外独立线程执行（<code style="color:var(--green);">std::thread</code>），不阻塞 UI。取消通过 <code style="color:var(--green);">std::atomic&lt;bool&gt;</code> 标记，推理循环每生成一个 token 就检查一次。</p>
+      <p><strong style="color:var(--text);">③ n_ctx=256</strong>：上下文窗口限制在 256 token。翻译场景不需要长上下文，控制参数能显著降低内存占用和推理延迟。</p>
+      <p><strong style="color:var(--text);">④ 构建即交付</strong>：llama.cpp 被编译为 <strong style="color:var(--text);">静态库</strong>链接进 App——macOS 用 Xcode 静态链接 arm64 库，Android 用 CMake + NDK 交叉编译 arm64-v8a 库。用户安装的 .apk / .dmg 里面已经包含所有推理能力，不需要额外运行时或 CLI。</p>
+      <p><strong style="color:var(--text);">⑤ 模型独立管理</strong>：模型文件不内置在 App 包体里，用户通过「下载」或「导入」获取，存放在 App 私有目录。这样 App 本体只有 15-30MB，模型 440MB 按需获取。</p>
+    </div>
+
+    <h3>⚠️ 踩过的坑</h3>
+    <div style="max-width:720px;margin:0 auto;text-align:left;color:var(--muted);font-size:14px;line-height:1.8;">
+      <p>• <strong style="color:var(--text);">不要手写 prompt</strong>：Hy-MT1.5 的 chat template 是 jinja 格式，必须用 llama.cpp common 层的 <code style="color:var(--green);">common_chat_templates_apply()</code>。之前手写 token 序列导致输出全是乱码（重复字符）。</p>
+      <p>• <strong style="color:var(--text);">STQ1_0 需要 PR 分支</strong>：llama.cpp 主线不支持 STQ1_0 量化格式，必须用 <a href="https://github.com/ggml-org/llama.cpp/pull/22836">PR #22836</a> 的分支。仓库通过 git submodule 固定到该 commit。</p>
+      <p>• <strong style="color:var(--text);">Android 只用 arm64-v8a</strong>：不要编译 x86/x86_64 ABI。STQ1_0 的 SIMD 路径只适配 ARM NEON，x86 模拟器无法正确推理。</p>
+    </div>
   </div>
 </section>
 

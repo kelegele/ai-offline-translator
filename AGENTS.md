@@ -6,6 +6,8 @@
 
 - `docs/models_inventory.md`：本机模型清单与兼容性记录。
 - `docs/llama_pr22836_notes.md`：`llama.cpp` PR #22836 与 `STQ1_0` 加载说明。
+- `docs/index.html`：GitHub Pages 介绍页面（发布页），展示项目特性、架构、下载入口和 Demo 截图，截图素材在 `docs/public/`。
+
 - `docs/flutter_mobile_architecture.md`：计划中的 Flutter UI 与原生推理层架构。
 
 后续实现目录应遵循架构文档：`flutter_app/` 存放 Flutter 代码，`third_party/llama.cpp/` 存放固定版本的原生推理依赖，`scripts/` 存放可重复执行的安装与构建脚本。`third_party/llama.cpp/` 是 Git submodule，固定到 `llama.cpp` `PR #22836` 对应 commit。

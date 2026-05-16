@@ -30,51 +30,46 @@
 └─────────────────────────────────────────────┘
 ```
 
-### 关键技术点
+### 怎么包装 llama.cpp
 
-**1. 为什么选 STQ1_0 量化**
+我们不在 Dart 层直接调 llama.cpp，而是在 native 层做了一个**纯 C++ 翻译引擎头文件** `translator_engine.hpp`：
 
-原始 GGUF 模型约 440MB（1.25bit 量化），手机端加载完全可行。但这个量化格式（STQ1_0）不在 llama.cpp 主线，需要 [PR #22836](https://github.com/ggml-org/llama.cpp/pull/22836) 才能识别和加载。
+```cpp
+struct TranslatorEngine {
+    bool loadModel(const char* model_path);
+    void translate(const char* text, char* out, size_t out_size);
+    void cancel();
+    bool isModelLoaded();
+};
+```
 
-**2. 推理引擎的核心流程**
+上层（Flutter MethodChannel → ObjC++ / JNI）只需调这三个方法，完全不感知 llama.cpp 内部细节。macOS 和 Android 共用同一份 `translator_engine.cpp`，无需修改引擎代码。
 
-`TranslatorEngine`（C++）做了这些事：
+引擎内部封装了模型加载（`llama_model_load_from_file` → `llama_init_from_model`，n_ctx=256, n_threads=2）、jinja chat template 解析（`common_chat_templates_init` / `common_chat_templates_apply`）、tokenize（`common_tokenize`）、采样和生成循环（`common_prompt_batch_decode` → `common_sampler_sample` → `common_token_to_piece`）。取消通过 `std::atomic<bool>` 标记，推理循环每生成一个 token 就检查一次。
 
-1. **加载模型**：`llama_model_load_from_file()` → `llama_init_from_model()`，n_ctx=256, n_threads=2
-2. **解析 chat template**：`common_chat_templates_init()` 解析模型自带的 jinja 模板（Hy-MT1.5 用的是 jinja 格式）
-3. **构建 prompt**：`common_chat_templates_apply()` 把用户消息套进模板，生成完整 prompt
-4. **tokenize**：`common_tokenize()` 将 prompt 转为 token 序列
-5. **推理循环**：`common_prompt_batch_decode()` → `common_sampler_sample()` → `common_token_to_piece()`，逐 token 生成，直到遇到 EOS 或超过 128 token
-6. **取消**：通过 `atomic<bool>` 标记，推理循环每轮检查
+llama.cpp 以**静态库**形式编译，直接链接进 App 包：
+- macOS：Xcode 静态链接 arm64 库（`build-lib/`）
+- Android：CMake + NDK 交叉编译 arm64-v8a 库（`scripts/build_android_llama.sh` → `build-android/`）
 
-> ⚠️ **踩过的坑**：不要手写 prompt 或手动拼接 special tokens。Hy-MT1.5 的 chat template 是 jinja 格式，必须用 `llama.cpp/common` 的 chat template 系列函数处理。之前手写 token 序列导致输出全是乱码（重复字符）。
+### 怎么在移动端跑起来
 
-**3. 平台桥接方式**
+**① 模型体积**：Hy-MT1.5 约 440MB（1.25bit STQ1_0 量化）。对比原始 bf16（～7GB），体积缩小约 16 倍，手机存储和内存都扛得住。
 
-| 平台 | 桥接层 | 调用方式 |
-|------|--------|---------|
-| macOS | `TranslatorBridge` (ObjC++) | 直接 C++ 函数调用 |
-| Android | `translator_jni.cpp` (JNI) | JNI native method |
+**② 上下文窗口**：n_ctx=256。翻译场景不需要长上下文，小窗口显著降低内存和推理延迟。
 
-两个平台共用同一份 `translator_engine.cpp`，只是桥接层不同。
+**③ 独立线程推理**：推理在 `std::thread` 中执行，不阻塞 Flutter UI。取消时设置 atomic flag，推理循环下次检查时立即退出。
 
-**4. 模型管理**
+**④ 构建即交付**：用户安装的 .apk/.dmg 内含所有推理能力，不需要额外运行时或 CLI。
 
-- 模型不内置在 App 包里，用户通过「导入」或「下载」获取
-- 下载源：ModelScope（`https://modelscope.cn/models/AngelSlim/Hy-MT1.5-1.8B-1.25bit-GGUF/`）
-- 模型保存到 App 私有目录：
-  - Android: `files/models/`
-  - macOS/iOS: `Application Support/ai_offline_translator/models/`
-- 启动时自动扫描本地已有模型，找到就自动加载
+**⑤ 模型独立管理**：模型不内置在 App 包体里（否则 440MB 太臃肿），用户按需下载/导入到 App 私有目录。App 本体仅 15-30MB。
 
-**5. 构建方式**
+### 踩过的坑
 
-| 平台 | llama.cpp 集成方式 |
-|------|-------------------|
-| macOS | Xcode 直接链接静态库（`build-lib/` 目录） |
-| Android | CMake 链接预编译的 arm64-v8a 静态库（`build-android/` 目录） |
+- **不要手写 prompt**：Hy-MT1.5 的 chat template 是 jinja 格式，必须用 llama.cpp common 层的 chat template 函数。之前手写 token 序列导致输出全是乱码。
+- **STQ1_0 需要 PR 分支**：llama.cpp 主线不支持 STQ1_0 量化，必须用 [PR #22836](https://github.com/ggml-org/llama.cpp/pull/22836) 的分支，仓库通过 submodule 固定到该 commit。
+- **Android 只用 arm64-v8a**：STQ1_0 的 SIMD 路径只适配 ARM NEON，x86 模拟器无法正确推理。
 
-Android 构建需要先用 `scripts/build_android_llama.sh` 编译 llama.cpp 的 arm64 静态库。
+### 关键参数
 
 ## 可以复用什么
 
