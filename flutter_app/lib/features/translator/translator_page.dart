@@ -191,8 +191,8 @@ class _TranslatorPageState extends State<TranslatorPage> {
 
         return Scaffold(
           backgroundColor: AppColors.canvas,
-          body: SafeArea(
-            child: Column(
+          resizeToAvoidBottomInset: false,
+          body: Column(
               children: [
                 _buildNavBar(state),
                 // Language bar + action buttons (intrinsic height)
@@ -275,7 +275,6 @@ class _TranslatorPageState extends State<TranslatorPage> {
                 ),
               ],
             ),
-          ),
         );
       },
     );
@@ -308,8 +307,10 @@ class _TranslatorPageState extends State<TranslatorPage> {
       textColor = const Color(0xFF856404);
     }
 
+    final topPadding = MediaQuery.of(context).padding.top;
+
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      padding: EdgeInsets.fromLTRB(16, 8 + topPadding, 16, 8),
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(bottom: BorderSide(color: AppColors.hairline)),

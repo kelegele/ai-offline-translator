@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../design/app_colors.dart';
 import '../../design/app_spacing.dart';
@@ -129,7 +130,9 @@ class AboutPage extends StatelessWidget {
                     _ContactRow(
                       icon: Icons.code,
                       label: 'GitHub',
-                      value: 'github.com/kelegele/ai-offline-translator',
+                      value: 'kelegele/ai-offline-translator',
+                      copyable: false,
+                      onTap: () => launchUrl(Uri.parse('https://github.com/kelegele/ai-offline-translator')),
                     ),
                   ],
                 ),
@@ -257,18 +260,20 @@ class _ContactRow extends StatelessWidget {
     required this.label,
     required this.value,
     this.copyable = true,
+    this.onTap,
   });
 
   final IconData icon;
   final String label;
   final String value;
   final bool copyable;
+  final VoidCallback? onTap;
 
   void _copy(BuildContext context) {
     Clipboard.setData(ClipboardData(text: value));
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('已复制：\$value'),
+        content: const Text('已复制：Kelegele'),
         duration: const Duration(seconds: 1),
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.only(bottom: 80, left: 40, right: 40),
@@ -279,8 +284,9 @@ class _ContactRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final effectiveOnTap = onTap ?? (copyable ? () => _copy(context) : null);
     return GestureDetector(
-      onTap: copyable ? () => _copy(context) : null,
+      onTap: effectiveOnTap,
       child: Row(
         children: [
           Icon(icon, size: 16, color: AppColors.steel),
@@ -297,13 +303,15 @@ class _ContactRow extends StatelessWidget {
             child: Text(
               value,
               style: textTheme.bodySmall?.copyWith(
-                color: copyable ? AppColors.brandBlue : AppColors.ink,
+                color: (copyable || onTap != null) ? AppColors.brandBlue : AppColors.ink,
               ),
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          if (copyable)
+          if (copyable && onTap == null)
             Icon(Icons.copy, size: 14, color: AppColors.muted),
+          if (onTap != null)
+            Icon(Icons.open_in_new, size: 14, color: AppColors.muted),
         ],
       ),
     );

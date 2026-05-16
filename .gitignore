@@ -52,3 +52,4 @@ build/
 **/linux/flutter/ephemeral/
 **/windows/flutter/ephemeral/
 *.dmg
+*.apk
