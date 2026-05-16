@@ -199,6 +199,8 @@
       .btn { width: 100%; justify-content: center; }
     }
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script>mermaid.initialize({startOnLoad:true, theme:"dark", themeVariables:{fontFamily:"-apple-system,BlinkMacSystemFont,sans-serif"}});</script>
 </head>
 <body>
 
@@ -281,26 +283,18 @@
 <section id="how">
   <div class="container">
     <h2>🔧 它是怎么跑起来的</h2>
-    <div class="arch-diagram">
-<pre>┌─────────────────────────────────────────────┐
-│              <span class="box">Flutter UI (Dart)</span>                │
-│  翻译页面 / 模型管理 / 语言选择 / 打字机渲染     │
-└──────────────────┬──────────────────────────┘
-                   │ <span class="hl">MethodChannel</span>
-┌──────────────────┴──────────────────────────┐
-│     <span class="box">Platform Bridge (Swift / Kotlin)</span>      │
-│  模型导入下载 / 文件管理 / 线程调度             │
-└──────────────────┬──────────────────────────┘
-                   │ <span class="hl">C++ function call</span>
-┌──────────────────┴──────────────────────────┐
-│          <span class="box">TranslatorEngine (C++)</span>             │
-│  llama.cpp 加载模型 / tokenize / 推理 / 采样   │
-└──────────────────┬──────────────────────────┘
-                   │ links against
-┌──────────────────┴──────────────────────────┐
-│ <span class="box">llama.cpp</span> (with PR #22836 for STQ1_0)  │
-│ ggml / llama / common (chat template)         │
-└─────────────────────────────────────────────┘</pre>
+    <div class="arch-diagram" style="background:transparent;border:none;padding:20px 0;">
+      <pre class="mermaid">
+flowchart TD
+    Flutter["📱 Flutter UI (Dart)<br/>翻译页面 / 模型管理 / 语言选择 / 打字机渲染"]
+    Bridge["🔌 Platform Bridge (Swift / Kotlin)<br/>模型导入下载 / 文件管理 / 线程调度"]
+    Engine["⚙️ TranslatorEngine (C++)<br/>llama.cpp 加载模型 / tokenize / 推理 / 采样"]
+    Llama["🧠 llama.cpp<br/>ggml / llama / common (chat template)<br/>with PR #22836 for STQ1_0"]
+
+    Flutter -->|"MethodChannel"| Bridge
+    Bridge -->|"C++ function call"| Engine
+    Engine -->|"links against"| Llama
+      </pre>
     </div>
     <h3>为什么选 STQ1_0 量化</h3>
     <p style="color:var(--muted)">Hy-MT1.5 约 440MB（1.25bit 量化），手机端加载完全可行。该量化格式需 llama.cpp PR #22836 支持。</p>
