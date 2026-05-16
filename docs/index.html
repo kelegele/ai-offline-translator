@@ -124,28 +124,6 @@
     .feature-card h3 { margin: 0 0 8px; }
     .feature-card p { color: var(--muted); font-size: 14px; }
 
-    .arch-diagram {
-      display: flex;
-      justify-content: center;
-      padding: 32px 0;
-      overflow-x: auto;
-    }
-    .arch-diagram .mermaid {
-      display: inline-block;
-      font-family: "SF Mono", "Fira Code", monospace;
-      font-size: 13px;
-      line-height: 1.8;
-      color: var(--muted);
-    }
-    .arch-diagram .hl { color: var(--green); }
-    .arch-diagram .box {
-      display: inline-block;
-      border: 1px solid var(--border);
-      padding: 2px 8px;
-      border-radius: 6px;
-      color: var(--text);
-    }
-
     .platform-table {
       width: 100%;
       border-collapse: collapse;
@@ -201,8 +179,6 @@
       .btn { width: 100%; justify-content: center; }
     }
   </style>
-  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
-  <script>mermaid.initialize({startOnLoad:true, theme:"dark", themeVariables:{fontFamily:"-apple-system,BlinkMacSystemFont,sans-serif"}});</script>
 </head>
 <body>
 
@@ -285,22 +261,71 @@
 <section id="how">
   <div class="container">
     <h2>🔧 它是怎么跑起来的</h2>
-    <div class="arch-diagram">
-      <pre class="mermaid">
-%%{init: {'theme':'dark', 'themeVariables': {'fontFamily':'-apple-system,BlinkMacSystemFont,sans-serif'}, 'flowchart': {'nodeSpacing': 60, 'rankSpacing': 50}}}%%
-flowchart TD
-    Flutter["📱<br/>Flutter UI<br/>Dart<br/>翻译页面 · 模型管理<br/>语言选择 · 打字机渲染"]
-    Bridge["🔌<br/>Platform Bridge<br/>Swift / Kotlin<br/>模型导入下载 · 文件管理<br/>线程调度"]
-    Engine["⚙️<br/>TranslatorEngine<br/>C++<br/>llama.cpp 加载模型<br/>tokenize · 推理 · 采样"]
-    Llama["🧠<br/>llama.cpp<br/>ggml · llama · common<br/>chat template 解析<br/>PR #22836 · STQ1_0"]
-
-    Flutter -->|"MethodChannel"| Bridge
-    Bridge -->|"C++ function call"| Engine
-    Engine -->|"links against"| Llama
-
-    classDef archBox fill:#1a1a1a,stroke:#2a2a2a,color:#e8e8e8,rx:12,ry:12
-    class Flutter,Bridge,Engine,Llama archBox
-      </pre>
+    <style>
+      .arch-stack {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0;
+        margin: 0 auto;
+        max-width: 480px;
+        padding: 0 16px;
+      }
+      .arch-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 20px 24px;
+        width: 100%;
+        text-align: center;
+      }
+      .arch-card .icon {
+        font-size: 24px;
+        margin-bottom: 6px;
+      }
+      .arch-card .title {
+        font-size: 15px;
+        font-weight: 700;
+        color: var(--text);
+        margin-bottom: 8px;
+      }
+      .arch-card .desc {
+        font-size: 13px;
+        color: var(--muted);
+        line-height: 1.6;
+      }
+      .arch-arrow {
+        color: var(--green);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 10px 0;
+        text-align: center;
+      }
+    </style>
+    <div class="arch-stack">
+      <div class="arch-card">
+        <div class="icon">📱</div>
+        <div class="title">Flutter UI (Dart)</div>
+        <div class="desc">翻译页面 · 模型管理 · 语言选择 · 打字机渲染</div>
+      </div>
+      <div class="arch-arrow"><span class="label">MethodChannel</span> ▼</div>
+      <div class="arch-card">
+        <div class="icon">🔌</div>
+        <div class="title">Platform Bridge (Swift / Kotlin)</div>
+        <div class="desc">模型导入下载 · 文件管理 · 线程调度</div>
+      </div>
+      <div class="arch-arrow"><span class="label">C++ function call</span> ▼</div>
+      <div class="arch-card">
+        <div class="icon">⚙️</div>
+        <div class="title">TranslatorEngine (C++)</div>
+        <div class="desc">llama.cpp 加载模型 · tokenize · 推理 · 采样</div>
+      </div>
+      <div class="arch-arrow"><span class="label">links against</span> ▼</div>
+      <div class="arch-card">
+        <div class="icon">🧠</div>
+        <div class="title">llama.cpp</div>
+        <div class="desc">ggml · llama · common (chat template)<br/>with PR #22836 for STQ1_0</div>
+      </div>
     </div>
     <h3>为什么选 STQ1_0 量化</h3>
     <p style="color:var(--muted)">Hy-MT1.5 约 440MB（1.25bit 量化），手机端加载完全可行。该量化格式需 llama.cpp PR #22836 支持。</p>
