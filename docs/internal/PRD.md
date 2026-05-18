@@ -26,6 +26,18 @@
 - Android 沉浸式 edge-to-edge 布局
 - 发布流程：GitHub Release 自动上传 APK + DMG
 
+### 规划：HarmonyOS NEXT 原生端
+
+HarmonyOS NEXT 按新平台端规划，不依赖 Android APK 兼容层。
+
+- UI 使用 ArkTS / ArkUI 原生实现
+- Native bridge 使用 NAPI 调用 C++ `.so`
+- 复用 shared native `translator_engine.cpp`
+- llama.cpp / ggml 使用 OHOS Native SDK 重新编译
+- 仅支持 ARM64 / AArch64，不支持 x86 / x86_64
+- 功能目标对齐 macOS / Android v0.1.0
+- 进入产品化前必须先完成真机 native smoke test
+
 ### v0.0.2
 
 - 用户只能通过"导入模型"或"下载模型"获得模型
@@ -76,6 +88,7 @@
 ## 跨端一致性要求
 
 - macOS、Android 产品行为必须一致
+- HarmonyOS NEXT 若进入开发，产品行为必须对齐 macOS / Android，但实现方式可使用 ArkTS / ArkUI 原生栈
 - 各端都不能提供手填路径输入框
 - 各端都不能在普通界面展示完整本地路径
 - 各端都必须把模型落到 App 私有目录
@@ -93,11 +106,14 @@
 - 不用 CLI 模式作为产品架构
 - 当前阶段不做 iOS（侧载体验差）
 - 不上架 App Store / Google Play
+- 不把 Android `.so` 直接复用为 HarmonyOS NEXT 原生产物
 
 ## 技术约束
 
 - 推理路线：Flutter UI + shared native `translator_engine` + thin platform bridge
+- HarmonyOS NEXT 推理路线：ArkTS / ArkUI + NAPI + shared native `translator_engine`
 - 默认模型：`Hy-MT1.5-1.8B-STQ1_0.gguf`
 - `llama.cpp` 必须保持 PR #22836 STQ1_0 兼容
 - 原生引擎复用 `llama.cpp/common` chat template / tokenize / sampler
 - Android 仅 `arm64-v8a`
+- HarmonyOS NEXT 仅 ARM64 / AArch64，需用 OHOS Native SDK 重新编译 native 依赖

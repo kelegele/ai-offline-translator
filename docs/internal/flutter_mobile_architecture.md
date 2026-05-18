@@ -12,6 +12,7 @@
 - 当前目标不是 Windows 本地高性能推理
 - Windows 仅作为开发、文档、目录规范和最小兼容验证环境
 - 真实运行路径优先面向 Apple Silicon / ARM 移动端
+- HarmonyOS NEXT 不纳入 Flutter 主线，按 ArkTS / ArkUI + NAPI + shared native `translator_engine` 的原生端路线单独规划
 
 ## 推荐架构
 
@@ -146,3 +147,20 @@ Windows 备注：
 - 本地 server
 - RAG / 知识库
 - 复杂插件系统
+
+## HarmonyOS NEXT 关系
+
+HarmonyOS NEXT 不直接沿用本 Flutter 工程作为首选路线。原因：
+
+- Flutter 官方主线支持平台不覆盖 HarmonyOS NEXT 原生端
+- HarmonyOS NEXT 原生 App 应使用 ArkTS / ArkUI
+- Native bridge 应使用 NAPI，而不是 Android JNI 或 Flutter MethodChannel
+- Android `arm64-v8a` `.so` 不能直接作为 HarmonyOS NEXT 原生产物复用
+
+可复用边界：
+
+- 复用 `flutter_app/native/translator_engine/translator_engine.cpp`
+- 复用 llama.cpp PR #22836 / STQ1_0 技术路线
+- 复用模型导入、下载、App 私有目录、启动自动加载、流式 token 输出等产品流程
+
+详细方案见 `docs/internal/harmonyos_next_plan.md`。

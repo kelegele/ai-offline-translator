@@ -97,14 +97,29 @@ llama.cpp 以**静态库**形式编译，直接链接进 App 包：
 
 ### 5. 平台差异对照
 
-| | macOS | Android |
-|---|---|---|
-| 语言 | ObjC++ wrapper → C++ | JNI → C++ |
-| 编译 | Xcode 静态链接 | CMake + ndk-build |
-| 模型目录 | Application Support | files/models/ |
-| 文件选择 | NSOpenPanel | FilePicker (Intent) |
-| 下载 | URLSession | OkHttp |
-| ABI | arm64 only | arm64-v8a only |
+| | macOS | Android | HarmonyOS NEXT（规划） |
+|---|---|---|---|
+| 语言 | ObjC++ wrapper → C++ | JNI → C++ | ArkTS / ArkUI → NAPI → C++ |
+| 编译 | Xcode 静态链接 | CMake + NDK | DevEco Studio + OHOS Native SDK |
+| 模型目录 | Application Support | files/models/ | App 私有 models 目录 |
+| 文件选择 | NSOpenPanel | FilePicker (Intent) | HarmonyOS Picker |
+| 下载 | URLSession | OkHttp | HarmonyOS 网络 API |
+| ABI | arm64 only | arm64-v8a only | ARM64 / AArch64 only |
+
+## 规划路线
+
+当前已完成：
+
+- **macOS**：用于桌面体验和快速验证，支持模型导入、下载、加载、流式翻译和 DMG 分发。
+- **Android**：移动端主线，支持 arm64-v8a 原生推理、模型导入/下载、沉浸式 UI 和 APK 分发。
+
+下一阶段探索：
+
+- **HarmonyOS NEXT 原生端**：按新平台端处理，不依赖 Android APK 兼容层。计划采用 ArkTS / ArkUI + NAPI + shared native `translator_engine.cpp`，用 OHOS Native SDK 重新编译 llama.cpp。麒麟等鸿蒙手机按 ARM64 / AArch64 方向规划，但必须在真机验证 llama.cpp、`STQ1_0` 和 NAPI 线程模型。
+
+暂不投入：
+
+- **iOS**：不上架 App Store 时只能侧载 .ipa，用户体验和分发成本不适合当前开源小工具阶段。
 
 ## 快速开始
 
@@ -192,9 +207,13 @@ ai-offline-translator/
 ├── scripts/
 │   └── build_android_llama.sh        # Android arm64 静态库构建
 ├── docs/
-│   ├── PRD.md                        # 产品需求
-│   ├── flutter_mobile_architecture.md
-│   └── ...
+│   ├── index.html                    # GitHub Pages 发布页
+│   ├── public/                       # 发布页截图资源
+│   ├── internal/                     # 认知与技术方案文档
+│   │   ├── PRD.md
+│   │   ├── flutter_mobile_architecture.md
+│   │   └── harmonyos_next_plan.md
+│   └── superpowers/                  # 计划与规格记录
 ├── CHANGELOG.md
 ├── AGENTS.md                         # 开发规范与经验教训
 └── DESIGN.md                         # UI 设计规范
@@ -224,9 +243,10 @@ v0.1.0 - 首个双平台功能完整可用版本。详情见 [CHANGELOG.md](./CH
 ## 文档索引
 
 - [CHANGELOG.md](./CHANGELOG.md) - 版本变更历史
-- [PRD.md](./docs/PRD.md) - 产品需求文档
+- [PRD.md](./docs/internal/PRD.md) - 产品需求文档
 - [DESIGN.md](./DESIGN.md) - UI 视觉设计规范
-- [flutter_mobile_architecture.md](./docs/flutter_mobile_architecture.md) - Flutter 移动端架构设计
-- [llama_pr22836_notes.md](./docs/llama_pr22836_notes.md) - llama.cpp PR #22836 与 STQ1_0 分析
-- [models_inventory.md](./docs/models_inventory.md) - 本机模型清单
-- [decision_record_2026-05-15.md](./docs/decision_record_2026-05-15.md) - 技术决策记录
+- [flutter_mobile_architecture.md](./docs/internal/flutter_mobile_architecture.md) - Flutter 移动端架构设计
+- [harmonyos_next_plan.md](./docs/internal/harmonyos_next_plan.md) - HarmonyOS NEXT 原生端方案
+- [llama_pr22836_notes.md](./docs/internal/llama_pr22836_notes.md) - llama.cpp PR #22836 与 STQ1_0 分析
+- [models_inventory.md](./docs/internal/models_inventory.md) - 本机模型清单
+- [decision_record_2026-05-15.md](./docs/internal/decision_record_2026-05-15.md) - 技术决策记录
