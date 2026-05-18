@@ -184,6 +184,10 @@
       border-color: var(--accent);
       color: #000;
     }
+    .btn.disabled {
+      pointer-events: none;
+      opacity: 0.55;
+    }
 
     /* ── Sections ── */
     section {
@@ -489,6 +493,13 @@
       color: var(--muted);
       margin-bottom: 16px;
     }
+    .download-card .release-status {
+      min-height: 16px;
+      color: var(--muted);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      margin-top: 8px;
+    }
 
     /* ── Join Section ── */
     .join-section {
@@ -725,9 +736,10 @@
         <div class="inner">
           <div class="os">🍏</div>
           <h3>macOS</h3>
-          <p class="meta">DMG · arm64 · ~15MB</p>
-          <a href="https://github.com/kelegele/ai-offline-translator/releases/latest/download/AI-Offline-Translator-v0.1.0-macos.dmg" class="btn primary" style="width:100%;">下载 DMG</a>
-          <a href="https://gh-proxy.com/https://github.com/kelegele/ai-offline-translator/releases/download/v0.1.0/AI-Offline-Translator-v0.1.0-macos.dmg" class="btn" style="width:100%;margin-top:8px;">🔄 代理下载</a>
+          <p class="meta" data-download-meta="macos">DMG · arm64</p>
+          <a href="https://github.com/kelegele/ai-offline-translator/releases/latest" class="btn primary disabled" data-download-direct="macos" style="width:100%;">获取最新版本中</a>
+          <a href="https://gh-proxy.com/https://github.com/kelegele/ai-offline-translator/releases/latest" class="btn disabled" data-download-proxy="macos" style="width:100%;margin-top:8px;">代理下载</a>
+          <div class="release-status" data-download-status="macos">正在读取 GitHub Release</div>
           <p style="color:var(--muted);font-size:11px;margin-top:8px;font-family:var(--font-mono);">首次打开需右键 → 打开</p>
         </div>
       </div>
@@ -736,9 +748,10 @@
         <div class="inner">
           <div class="os">🤖</div>
           <h3>Android</h3>
-          <p class="meta">APK · arm64-v8a · ~30MB</p>
-          <a href="https://github.com/kelegele/ai-offline-translator/releases/latest/download/AI-Offline-Translator-v0.1.0-android-arm64.apk" class="btn primary" style="width:100%;">下载 APK</a>
-          <a href="https://gh-proxy.com/https://github.com/kelegele/ai-offline-translator/releases/download/v0.1.0/AI-Offline-Translator-v0.1.0-android-arm64.apk" class="btn" style="width:100%;margin-top:8px;">🔄 代理下载</a>
+          <p class="meta" data-download-meta="android">APK · arm64-v8a</p>
+          <a href="https://github.com/kelegele/ai-offline-translator/releases/latest" class="btn primary disabled" data-download-direct="android" style="width:100%;">获取最新版本中</a>
+          <a href="https://gh-proxy.com/https://github.com/kelegele/ai-offline-translator/releases/latest" class="btn disabled" data-download-proxy="android" style="width:100%;margin-top:8px;">代理下载</a>
+          <div class="release-status" data-download-status="android">正在读取 GitHub Release</div>
           <p style="color:var(--muted);font-size:11px;margin-top:8px;font-family:var(--font-mono);">需手动授予存储权限</p>
         </div>
       </div>
@@ -761,7 +774,7 @@
 
 <footer>
   <div class="container">
-    <p>AI 离线翻译 · v0.1.0 · MIT License · <a href="https://github.com/kelegele/ai-offline-translator">GitHub</a></p>
+    <p>AI 离线翻译 · <span data-release-version>latest</span> · MIT License · <a href="https://github.com/kelegele/ai-offline-translator">GitHub</a></p>
   </div>
 </footer>
 
@@ -772,6 +785,73 @@
   }, { threshold: 0.15 });
   document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
 
+  const releaseApi = 'https://api.github.com/repos/kelegele/ai-offline-translator/releases/latest';
+  const latestPage = 'https://github.com/kelegele/ai-offline-translator/releases/latest';
+  const proxyPrefix = 'https://gh-proxy.com/';
+
+  const formatBytes = (bytes) => {
+    if (!Number.isFinite(bytes) || bytes <= 0) return '';
+    const mb = bytes / 1024 / 1024;
+    return ` · ${mb >= 10 ? Math.round(mb) : mb.toFixed(1)}MB`;
+  };
+
+  const findAsset = (assets, platform) => {
+    if (platform === 'macos') {
+      return assets.find(asset => asset.name.endsWith('.dmg'));
+    }
+    return assets.find(asset =>
+      asset.name.endsWith('.apk') &&
+      asset.name.toLowerCase().includes('android-arm64')
+    ) || assets.find(asset => asset.name.endsWith('.apk'));
+  };
+
+  const updateDownloadCard = (platform, asset, releaseName) => {
+    const direct = document.querySelector(`[data-download-direct="${platform}"]`);
+    const proxy = document.querySelector(`[data-download-proxy="${platform}"]`);
+    const meta = document.querySelector(`[data-download-meta="${platform}"]`);
+    const status = document.querySelector(`[data-download-status="${platform}"]`);
+    if (!direct || !proxy || !meta || !status) return;
+
+    if (!asset) {
+      direct.href = latestPage;
+      direct.textContent = platform === 'macos' ? '查看 macOS 版本' : '查看 Android 版本';
+      proxy.href = `${proxyPrefix}${latestPage}`;
+      proxy.textContent = '代理打开 Release';
+      direct.classList.remove('disabled');
+      proxy.classList.remove('disabled');
+      status.textContent = '未找到对应安装包，请查看 Release';
+      return;
+    }
+
+    direct.href = asset.browser_download_url;
+    direct.textContent = platform === 'macos' ? '下载 DMG' : '下载 APK';
+    proxy.href = `${proxyPrefix}${asset.browser_download_url}`;
+    proxy.textContent = '代理下载';
+    meta.textContent = platform === 'macos'
+      ? `DMG · arm64${formatBytes(asset.size)}`
+      : `APK · arm64-v8a${formatBytes(asset.size)}`;
+    status.textContent = `${releaseName || '最新版本'} · 自动更新链接`;
+    direct.classList.remove('disabled');
+    proxy.classList.remove('disabled');
+  };
+
+  fetch(releaseApi)
+    .then(response => {
+      if (!response.ok) throw new Error(`GitHub API ${response.status}`);
+      return response.json();
+    })
+    .then(release => {
+      const assets = Array.isArray(release.assets) ? release.assets : [];
+      updateDownloadCard('macos', findAsset(assets, 'macos'), release.tag_name);
+      updateDownloadCard('android', findAsset(assets, 'android'), release.tag_name);
+      document.querySelectorAll('[data-release-version]').forEach(el => {
+        el.textContent = release.tag_name || 'latest';
+      });
+    })
+    .catch(() => {
+      updateDownloadCard('macos', null, 'latest');
+      updateDownloadCard('android', null, 'latest');
+    });
 
 </script>
 
