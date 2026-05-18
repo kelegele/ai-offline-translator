@@ -99,7 +99,7 @@ llama.cpp 以**静态库**形式编译，直接链接进 App 包：
 
 | | macOS | Android | HarmonyOS NEXT（规划） |
 |---|---|---|---|
-| 语言 | ObjC++ wrapper → C++ | JNI → C++ | ArkTS / ArkUI → NAPI → C++ |
+| 语言 | ObjC++ wrapper → C++ | JNI → C++ | ArkTS (platform channel) → C++ |
 | 编译 | Xcode 静态链接 | CMake + NDK | DevEco Studio + OHOS Native SDK |
 | 模型目录 | Application Support | files/models/ | App 私有 models 目录 |
 | 文件选择 | NSOpenPanel | FilePicker (Intent) | HarmonyOS Picker |
@@ -113,9 +113,9 @@ llama.cpp 以**静态库**形式编译，直接链接进 App 包：
 - **macOS**：用于桌面体验和快速验证，支持模型导入、下载、加载、流式翻译和 DMG 分发。
 - **Android**：移动端主线，支持 arm64-v8a 原生推理、模型导入/下载、沉浸式 UI 和 APK 分发。
 
-下一阶段探索：
+下一阶段：
 
-- **HarmonyOS NEXT 原生端**：按新平台端处理，不依赖 Android APK 兼容层。计划采用 ArkTS / ArkUI + NAPI + shared native `translator_engine.cpp`，用 OHOS Native SDK 重新编译 llama.cpp。麒麟等鸿蒙手机按 ARM64 / AArch64 方向规划，但必须在真机验证 llama.cpp、`STQ1_0` 和 NAPI 线程模型。
+- **HarmonyOS NEXT 原生端**：首选 **Flutter on OHOS 路径**（openharmony-tpc/flutter_flutter），复用现有 flutter_app UI 和业务逻辑，用 OHOS Native SDK 重新编译 llama.cpp。麒麟等鸿蒙手机按 ARM64 / AArch64 方向规划，须在真机验证 llama.cpp、`STQ1_0` 和推理线程模型。备选 ArkTS/ArkUI 原生栈。详细方案见 [harmonyos_next_plan.md](./docs/internal/harmonyos_next_plan.md)。
 
 暂不投入：
 

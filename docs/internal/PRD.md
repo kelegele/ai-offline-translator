@@ -88,7 +88,7 @@ HarmonyOS NEXT 按新平台端规划，不依赖 Android APK 兼容层。
 ## 跨端一致性要求
 
 - macOS、Android 产品行为必须一致
-- HarmonyOS NEXT 若进入开发，产品行为必须对齐 macOS / Android，但实现方式可使用 ArkTS / ArkUI 原生栈
+- HarmonyOS NEXT **首选 Flutter on OHOS 路径**（复用 flutter_app），产品行为必须对齐 macOS / Android。备选 ArkTS/ArkUI 原生栈。
 - 各端都不能提供手填路径输入框
 - 各端都不能在普通界面展示完整本地路径
 - 各端都必须把模型落到 App 私有目录
@@ -111,7 +111,7 @@ HarmonyOS NEXT 按新平台端规划，不依赖 Android APK 兼容层。
 ## 技术约束
 
 - 推理路线：Flutter UI + shared native `translator_engine` + thin platform bridge
-- HarmonyOS NEXT 推理路线：ArkTS / ArkUI + NAPI + shared native `translator_engine`
+- HarmonyOS NEXT 推理路线：Flutter on OHOS（首选）或 ArkTS/ArkUI + NAPI（备选）+ shared native `translator_engine`
 - 默认模型：`Hy-MT1.5-1.8B-STQ1_0.gguf`
 - `llama.cpp` 必须保持 PR #22836 STQ1_0 兼容
 - 原生引擎复用 `llama.cpp/common` chat template / tokenize / sampler

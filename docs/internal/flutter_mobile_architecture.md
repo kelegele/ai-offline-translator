@@ -150,11 +150,11 @@ Windows 备注：
 
 ## HarmonyOS NEXT 关系
 
-HarmonyOS NEXT 不直接沿用本 Flutter 工程作为首选路线。原因：
+HarmonyOS NEXT **首选 Flutter on OHOS 路径**（openharmony-tpc/flutter_flutter）。如该路径不可行，备选 ArkTS/ArkUI 原生栈。原因：
 
-- Flutter 官方主线支持平台不覆盖 HarmonyOS NEXT 原生端
-- HarmonyOS NEXT 原生 App 应使用 ArkTS / ArkUI
-- Native bridge 应使用 NAPI，而不是 Android JNI 或 Flutter MethodChannel
+- Flutter 官方主线不覆盖，但社区 fork（openharmony-tpc）已成熟可用
+- 如 Flutter 路径失败，原生 App 应使用 ArkTS / ArkUI
+- Flutter 路径使用 platform channel（与 macOS/Android 一致），ArkTS 路径使用 NAPI
 - Android `arm64-v8a` `.so` 不能直接作为 HarmonyOS NEXT 原生产物复用
 
 可复用边界：
@@ -163,4 +163,4 @@ HarmonyOS NEXT 不直接沿用本 Flutter 工程作为首选路线。原因：
 - 复用 llama.cpp PR #22836 / STQ1_0 技术路线
 - 复用模型导入、下载、App 私有目录、启动自动加载、流式 token 输出等产品流程
 
-详细方案见 `docs/internal/harmonyos_next_plan.md`。
+详细方案见 [harmonyos_next_plan.md](harmonyos_next_plan.md)，含 Flutter on OHOS vs ArkTS/ArkUI 两条路径对比。
