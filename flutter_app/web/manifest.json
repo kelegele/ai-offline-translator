@@ -1,0 +1,10 @@
+{
+  "name": "AI离线翻译",
+  "short_name": "AI翻译",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "description": "基于 Hy-MT 大语言模型的离线翻译工具",
+  "icons": []
+}

@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:io' show FileSystemException, Platform;
-
 import 'package:flutter/foundation.dart';
 
 import 'model_download_state.dart';
@@ -57,7 +55,7 @@ class TranslatorController extends ChangeNotifier {
       modelState: ModelSelectionState(
         status: ModelLifecycleStatus.selected,
         selectedPath: trimmed,
-        displayName: trimmed.split(Platform.pathSeparator).last,
+        displayName: trimmed.split('/').last,
       ),
       clearError: true,
     );
@@ -292,11 +290,8 @@ class TranslatorController extends ChangeNotifier {
   }
 
   String messageFor(Object error) {
-    if (error is StateError) {
-      return error.message;
-    }
-    if (error is FileSystemException) {
-      return error.message;
+    if (error is Exception) {
+      return error.toString();
     }
     return error.toString();
   }

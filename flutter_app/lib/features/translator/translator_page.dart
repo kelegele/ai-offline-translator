@@ -1,7 +1,7 @@
 import 'dart:async';
-import 'dart:io' show Platform;
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -103,7 +103,7 @@ class _TranslatorPageState extends State<TranslatorPage> {
 
   Future<void> _importModelFromSheet(BuildContext sheetContext) async {
     String? path;
-    if (Platform.isAndroid) {
+    if (defaultTargetPlatform == TargetPlatform.android) {
       path = await _importAndroidModel();
     } else {
       path = await _translatorChannel.importModelFile();
@@ -232,7 +232,7 @@ class _TranslatorPageState extends State<TranslatorPage> {
                     child: Column(
                       children: [
                         Expanded(
-                          flex: 1,
+                          flex: 9,
                           child: _InputPanel(
                             controller: _textController,
                             characterCount: _characterCount,
@@ -252,7 +252,7 @@ class _TranslatorPageState extends State<TranslatorPage> {
                         ),
                         const SizedBox(height: AppSpacing.sm),
                         Expanded(
-                          flex: 1,
+                          flex: 11,
                           child: _OutputPanel(state: state),
                         ),
                       ],
@@ -516,13 +516,18 @@ class _LangBar extends StatelessWidget {
   final ValueChanged<String> onTargetChanged;
   final VoidCallback onSwap;
 
+  String _labelForLanguage(String name) {
+    final index = languages.indexWhere((l) => l.name == name);
+    return index != -1 ? languages[index].menuLabel : name;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
         Expanded(
           child: _LangButton(
-            label: sourceLanguage,
+            label: _labelForLanguage(sourceLanguage),
             onTap: () => _showLangMenu(context, true),
           ),
         ),
@@ -537,7 +542,7 @@ class _LangBar extends StatelessWidget {
         ),
         Expanded(
           child: _LangButton(
-            label: targetLanguage,
+            label: _labelForLanguage(targetLanguage),
             onTap: () => _showLangMenu(context, false),
           ),
         ),

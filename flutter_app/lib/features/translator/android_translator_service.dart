@@ -1,4 +1,4 @@
-import 'dart:io' show Platform;
+// web: no dart:io needed — this file is only used on Android
 
 import 'package:file_picker/file_picker.dart';
 
@@ -42,7 +42,7 @@ class AndroidTranslatorService implements TranslatorService {
     required int nThreads,
   }) {
     _modelPath = path;
-    final androidThreads = Platform.numberOfProcessors.clamp(2, 4);
+    const androidThreads = 4;
     return _channel.loadModel(
       path: path,
       nCtx: nCtx,
