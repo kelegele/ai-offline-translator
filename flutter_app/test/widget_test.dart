@@ -8,8 +8,8 @@ void main() {
 
     expect(find.text('AI离线翻译'), findsOneWidget);
     expect(find.text('未加载模型'), findsOneWidget);
-    expect(find.text('英语'), findsAtLeast(1));
-    expect(find.text('中文'), findsAtLeast(1));
+    expect(find.text('英语 (en)'), findsAtLeast(1));
+    expect(find.text('中文 (zh)'), findsAtLeast(1));
     expect(find.text('译文'), findsOneWidget);
     expect(find.text('翻译'), findsOneWidget);
 
@@ -34,7 +34,7 @@ void main() {
   ) async {
     await tester.pumpWidget(const OfflineTranslatorApp());
 
-    await tester.tap(find.text('英语').first);
+    await tester.tap(find.text('英语 (en)').first);
     await tester.pumpAndSettle();
 
     expect(find.text('法语 (fr)'), findsOneWidget);

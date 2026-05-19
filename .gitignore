@@ -38,6 +38,7 @@ build/
 # Generated / platform-specific
 **/android/**/local.properties
 **/android/.gradle/
+**/android/.kotlin/
 **/android/captures/
 **/ios/Flutter/.last_build_id
 **/ios/Flutter/Flutter.framework
