@@ -117,3 +117,14 @@ HarmonyOS NEXT 按新平台端规划，不依赖 Android APK 兼容层。
 - 原生引擎复用 `llama.cpp/common` chat template / tokenize / sampler
 - Android 仅 `arm64-v8a`
 - HarmonyOS NEXT 仅 ARM64 / AArch64，需用 OHOS Native SDK 重新编译 native 依赖
+
+## 技术债务
+
+### 多语言排版方向
+
+当前 UI 默认按横排、从左到右文本处理。多语言扩展后需要补齐不同书写方向的排版能力：
+
+- `蒙古语 (mn)`：本项目按传统蒙古文处理。当前模型输出字形已能正常显示，首版可先在译文区域提供 90° 旋转显示模式；输入框、语言选择栏、按钮仍保持常规横排。复制内容必须保持原始文本顺序，不受视觉旋转影响。后续再评估是否需要真正的传统蒙古文竖排排版引擎。
+- `阿拉伯语 (ar)`、`波斯语 (fa)`、`乌尔都语 (ur)`、`希伯来语 (he)`：需要支持从右到左（RTL）排版。
+- 语言选择、输入框、译文输出、复制内容和流式渲染都应按语言方向应用一致规则。
+- 在实现前，需确认 Flutter Android / macOS / Web / HarmonyOS Flutter on OHOS 对 RTL、旋转显示和真正竖排排版的支持差异。
