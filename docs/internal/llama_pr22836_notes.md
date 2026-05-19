@@ -75,15 +75,26 @@ PR #22836 的核心是为 llama.cpp / ggml 增加一种新量化格式：`STQ1_0
 ### 失败样本
 
 模型：
+- 项目标准路径：`models/AngelSlim/Hy-MT1.5-1.8B-2bit-GGUF/Hy-MT1.5-1.8B-2bit.gguf`
 - 作者本机历史路径：`/Users/fh/LLMs/AngelSlim/Hy-MT1___5-1___8B-2bit__GUFF/Hy-MT1.5-1.8B-2bit.gguf`
+- SHA256：`2603ca8063c77328b544f8f6414b398d95893deafb60a9c1f11c2d2af4a20bfe`
 
 结果：
 - 加载失败
 
 错误特征：
-- GGUF tensor offset 不匹配
+- `tensor 'blk.0.attn_k_norm.weight' has offset 203248672, expected 203129888`
 - 说明文件布局或 writer/loader 版本不兼容
 
 结论：
 - 不能把这个 2bit GGUF 当成 STQ1_0 支持验证样本
 - 当前问题更像这份 GGUF 与当前 loader / writer 组合不兼容，不等于所有 2bit GGUF 都不兼容
+- PR #22836 的边界是 `STQ1_0` / 1.25bit 支持，不应被表述为 Hy-MT 2bit 支持
+
+截至 2026-05-19 的追加验证：
+
+- 当前 submodule `7ef6976b218cfce6158165f4c63a094acb70e707`：失败，同一 tensor offset mismatch
+- PR #22836 auto-merge `3aee90b50ff11f6c1917a8af55cbf4a8a37c394d`：失败，同一 tensor offset mismatch
+- `origin/master` 对照 `9a532ae4bab1b164052ce60a738f78538b421c66`：失败，同一 tensor offset mismatch
+
+官方 `Hy-MT-demo.apk` 中 `HyMT-2bit` 能加载的事实，说明 APK 自带 runtime 与上述公开候选不同。静态分析显示它基于 `llama.cpp` Android example 风格的 `libai-chat.so` + `libllama.so` + `libggml*.so` 方案，但 stripped `.so` 没有保留可确认的 `llama.cpp` commit。后续若要支持 2bit，应优先追溯 demo runtime 的额外 loader 兼容改动，而不是继续盲目切换公开 master / PR merge。

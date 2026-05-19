@@ -29,6 +29,29 @@ void main() {
     expect(find.text('下载'), findsOneWidget);
   });
 
+  testWidgets('language menu matches HyMT 1.25bit supported languages', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const OfflineTranslatorApp());
+
+    await tester.tap(find.text('英语').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('法语 (fr)'), findsOneWidget);
+    expect(find.text('粤语'), findsNothing);
+    expect(find.text('印地语'), findsNothing);
+
+    await tester.drag(
+      find.byKey(const ValueKey('language_menu_scroll')),
+      const Offset(0, -900),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('维吾尔语 (ug)'), findsOneWidget);
+    expect(find.text('粤语'), findsNothing);
+    expect(find.text('印地语'), findsNothing);
+  });
+
   testWidgets('input caps meaningful characters at 200', (tester) async {
     await tester.pumpWidget(const OfflineTranslatorApp());
 

@@ -52,7 +52,7 @@ class TranslatorState {
       runtimeStatus: runtimeStatus ?? this.runtimeStatus,
       modelState: modelState ?? this.modelState,
       modelDownloadState: modelDownloadState ?? this.modelDownloadState,
-      errorMessage: errorMessage != null ? errorMessage : clearError ? null : this.errorMessage,
+      errorMessage: errorMessage ?? (clearError ? null : this.errorMessage),
     );
   }
 }

@@ -476,7 +476,40 @@ class _LangBar extends StatelessWidget {
     required this.onSwap,
   });
 
-  static const languages = ['英语', '中文', '日语', '韩语'];
+  static const languages = [
+    _LanguageOption('zh', '中文'),
+    _LanguageOption('en', '英语'),
+    _LanguageOption('fr', '法语'),
+    _LanguageOption('pt', '葡萄牙语'),
+    _LanguageOption('es', '西班牙语'),
+    _LanguageOption('ja', '日语'),
+    _LanguageOption('tr', '土耳其语'),
+    _LanguageOption('ru', '俄语'),
+    _LanguageOption('ar', '阿拉伯语'),
+    _LanguageOption('ko', '韩语'),
+    _LanguageOption('th', '泰语'),
+    _LanguageOption('it', '意大利语'),
+    _LanguageOption('de', '德语'),
+    _LanguageOption('vi', '越南语'),
+    _LanguageOption('ms', '马来语'),
+    _LanguageOption('id', '印尼语'),
+    _LanguageOption('zh-Hant', '繁体中文'),
+    _LanguageOption('pl', '波兰语'),
+    _LanguageOption('cs', '捷克语'),
+    _LanguageOption('nl', '荷兰语'),
+    _LanguageOption('my', '缅甸语'),
+    _LanguageOption('fa', '波斯语'),
+    _LanguageOption('ur', '乌尔都语'),
+    _LanguageOption('mr', '马拉地语'),
+    _LanguageOption('he', '希伯来语'),
+    _LanguageOption('bn', '孟加拉语'),
+    _LanguageOption('ta', '泰米尔语'),
+    _LanguageOption('uk', '乌克兰语'),
+    _LanguageOption('bo', '藏语'),
+    _LanguageOption('kk', '哈萨克语'),
+    _LanguageOption('mn', '蒙古语'),
+    _LanguageOption('ug', '维吾尔语'),
+  ];
   final String sourceLanguage;
   final String targetLanguage;
   final ValueChanged<String> onSourceChanged;
@@ -515,53 +548,82 @@ class _LangBar extends StatelessWidget {
   void _showLangMenu(BuildContext context, bool isSource) {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(8, 12, 8, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.hairline,
-                  borderRadius: BorderRadius.circular(2),
+        child: FractionallySizedBox(
+          heightFactor: 0.75,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(8, 12, 8, 24),
+            child: Column(
+              children: [
+                Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.hairline,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                isSource ? '源语言' : '目标语言',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 8),
-              ...languages.map(
-                (lang) => ListTile(
-                  title: Text(lang),
-                  trailing: lang == (isSource ? sourceLanguage : targetLanguage)
-                      ? Icon(Icons.check, size: 20, color: AppColors.brandBlue)
-                      : null,
-                  onTap: () {
-                    if (isSource) {
-                      onSourceChanged(lang);
-                    } else {
-                      onTargetChanged(lang);
-                    }
-                    Navigator.pop(ctx);
-                  },
+                const SizedBox(height: 16),
+                Text(
+                  isSource ? '源语言' : '目标语言',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 8),
+                Expanded(
+                  child: SingleChildScrollView(
+                    key: const ValueKey('language_menu_scroll'),
+                    child: Column(
+                      children: languages
+                          .map(
+                            (language) => ListTile(
+                              title: Text(language.menuLabel),
+                              trailing:
+                                  language.name ==
+                                      (isSource
+                                          ? sourceLanguage
+                                          : targetLanguage)
+                                  ? Icon(
+                                      Icons.check,
+                                      size: 20,
+                                      color: AppColors.brandBlue,
+                                    )
+                                  : null,
+                              onTap: () {
+                                if (isSource) {
+                                  onSourceChanged(language.name);
+                                } else {
+                                  onTargetChanged(language.name);
+                                }
+                                Navigator.pop(ctx);
+                              },
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
+}
+
+class _LanguageOption {
+  const _LanguageOption(this.code, this.name);
+
+  final String code;
+  final String name;
+
+  String get menuLabel => '$name ($code)';
 }
 
 class _LangButton extends StatelessWidget {
