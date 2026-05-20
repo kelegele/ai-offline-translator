@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.1.1 - 2026-05-20
+
+### Added
+
+- 扩增 HyMT 1.25bit 官方支持语言列表，覆盖 32 种语言（不含官方 demo 排除的 6 种）。
+- 语言选择器和首页语言栏展示语言二字码，例如 `英语 (en)`。
+
+### Changed
+
+- 调整原文与译文输入区比例，提升桌面端翻译工作区可用空间。
+- Flutter App 版本更新为 `0.1.1+2`。
+
+### Verified
+
+- macOS: `flutter run -d macos` / release app 翻译验证通过
+- `flutter analyze` 无错误
+- `flutter test` 全部通过（26/26）
+- `flutter build macos --release` 构建通过
+- `uv run scripts/safe_llama_smoketest.py` 验证 `Hy-MT1.5-1.8B-STQ1_0.gguf` 可加载并完成受限推理
+
 ## v0.1.0 - 2026-05-16
 
 ### 重要里程碑

@@ -290,6 +290,9 @@ class TranslatorController extends ChangeNotifier {
   }
 
   String messageFor(Object error) {
+    if (error is StateError) {
+      return error.message;
+    }
     if (error is Exception) {
       return error.toString();
     }
