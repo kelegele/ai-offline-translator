@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'prompt_builder.dart';
 import 'translator_service.dart';
 
 class LlamaCliTranslatorService implements TranslatorService {

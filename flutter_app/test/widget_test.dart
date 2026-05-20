@@ -52,6 +52,16 @@ void main() {
     expect(find.text('印地语'), findsNothing);
   });
 
+  testWidgets('input panel is smaller than output panel', (tester) async {
+    await tester.pumpWidget(const OfflineTranslatorApp());
+
+    final inputPanel = find.byType(TextField).first;
+    final outputPanel = find.text('译文').evaluate().single.widget;
+
+    expect(inputPanel, findsOneWidget);
+    expect(outputPanel, isNotNull);
+  });
+
   testWidgets('input caps meaningful characters at 200', (tester) async {
     await tester.pumpWidget(const OfflineTranslatorApp());
 
@@ -59,5 +69,14 @@ void main() {
     await tester.pump();
 
     expect(find.text('200/200'), findsOneWidget);
+  });
+
+  testWidgets('output panel is taller than input panel', (tester) async {
+    await tester.pumpWidget(const OfflineTranslatorApp());
+
+    final inputRect = tester.getRect(find.byKey(const ValueKey('input_panel')));
+    final outputRect = tester.getRect(find.byKey(const ValueKey('output_panel')));
+
+    expect(outputRect.height, greaterThan(inputRect.height));
   });
 }

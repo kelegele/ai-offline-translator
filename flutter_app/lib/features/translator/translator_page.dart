@@ -225,7 +225,7 @@ class _TranslatorPageState extends State<TranslatorPage> {
                     ],
                   ),
                 ),
-                // Input & Output panels — 1:1 equal height, translate button between them
+                // Input & Output panels. Output gets slightly more reading space.
                 Expanded(
                   child: Padding(
                     padding: EdgeInsets.symmetric(horizontal: hPadding),
@@ -708,6 +708,7 @@ class _InputPanelState extends State<_InputPanel> {
     final hasText = widget.controller.text.isNotEmpty;
 
     return Container(
+      key: const ValueKey('input_panel'),
       constraints: const BoxConstraints.expand(),
       decoration: BoxDecoration(
         color: AppColors.canvas,
@@ -952,6 +953,7 @@ class _OutputPanelState extends State<_OutputPanel> {
     final isTranslating = widget.state.status == TranslatorStatus.translating;
 
     return Container(
+      key: const ValueKey('output_panel'),
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
