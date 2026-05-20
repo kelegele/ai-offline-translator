@@ -1,7 +1,5 @@
 import 'dart:async';
 
-import 'prompt_builder.dart';
-
 abstract interface class TranslatorService {
   Future<void> loadModel({
     required String path,
