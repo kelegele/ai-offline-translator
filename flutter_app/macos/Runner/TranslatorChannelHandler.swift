@@ -47,6 +47,8 @@ final class TranslatorChannelHandler: NSObject {
       result(downloadStatus)
     case "findLocalModel":
       findLocalModel(result: result)
+    case "listLocalModels":
+      listLocalModels(result: result)
     case "loadModel":
       guard let args = call.arguments as? [String: Any],
             let path = args["path"] as? String,
@@ -220,6 +222,31 @@ final class TranslatorChannelHandler: NSObject {
       }
     } catch {
       result(nil)
+    }
+  }
+
+  private func listLocalModels(result: @escaping FlutterResult) {
+    do {
+      let modelsDir = try modelsDirectoryURL()
+      let files = try FileManager.default.contentsOfDirectory(
+        at: modelsDir,
+        includingPropertiesForKeys: [.fileSizeKey],
+        options: .skipsHiddenFiles
+      )
+      let models = files
+        .filter { $0.pathExtension.lowercased() == "gguf" }
+        .sorted { $0.lastPathComponent.localizedCaseInsensitiveCompare($1.lastPathComponent) == .orderedAscending }
+        .map { url -> [String: Any] in
+          let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+          return [
+            "path": url.path,
+            "name": url.lastPathComponent,
+            "sizeBytes": size
+          ]
+        }
+      result(models)
+    } catch {
+      result([])
     }
   }
 
@@ -408,4 +435,3 @@ extension TranslatorChannelHandler: URLSessionDownloadDelegate {
     }
   }
 }
-

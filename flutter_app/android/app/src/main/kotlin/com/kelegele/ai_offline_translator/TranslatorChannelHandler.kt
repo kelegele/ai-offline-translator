@@ -77,6 +77,7 @@ class TranslatorChannelHandler(
                 "cancelModelDownload" -> handleCancelDownload(res)
                 "getModelDownloadStatus" -> res.success(downloadStatus)
                 "findLocalModel" -> findLocalModel(res)
+                "listLocalModels" -> listLocalModels(res)
                 "loadModel" -> handleLoadModel(call.arguments, res)
                 "translate" -> handleTranslate(call.arguments, res)
                 "beginTranslation" -> handleBeginTranslation(call.arguments, res)
@@ -110,6 +111,25 @@ class TranslatorChannelHandler(
             }
         } catch (e: Exception) {
             result.success(null)
+        }
+    }
+
+    private fun listLocalModels(result: MethodChannel.Result) {
+        try {
+            val models = modelsDir()
+                .listFiles { f -> f.isFile && f.extension.lowercase() == "gguf" }
+                ?.sortedBy { it.name.lowercase() }
+                ?.map { file ->
+                    mapOf(
+                        "path" to file.absolutePath,
+                        "name" to file.name,
+                        "sizeBytes" to file.length(),
+                    )
+                }
+                ?: emptyList()
+            result.success(models)
+        } catch (_: Exception) {
+            result.success(emptyList<Map<String, Any>>())
         }
     }
 

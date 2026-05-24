@@ -1,5 +1,7 @@
 import 'package:flutter/services.dart';
 
+import 'local_model_info.dart';
+
 class TranslatorChannel {
   const TranslatorChannel({
     MethodChannel channel = const MethodChannel(
@@ -41,6 +43,19 @@ class TranslatorChannel {
       'findLocalModel',
     );
     return result;
+  }
+
+  Future<List<LocalModelInfo>> listLocalModels() async {
+    final result = await _channel.invokeListMethod<Object?>('listLocalModels');
+    if (result == null) return const [];
+
+    return result
+        .whereType<Map<Object?, Object?>>()
+        .map(
+          (model) => LocalModelInfo.fromMap(Map<String, Object?>.from(model)),
+        )
+        .where((model) => model.path.trim().isNotEmpty)
+        .toList(growable: false);
   }
 
   Future<Map<String, Object?>> getModelDownloadStatus() async {

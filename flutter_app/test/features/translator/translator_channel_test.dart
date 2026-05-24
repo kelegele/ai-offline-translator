@@ -1,3 +1,4 @@
+import 'package:ai_offline_translator/features/translator/local_model_info.dart';
 import 'package:ai_offline_translator/features/translator/translator_channel.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -48,5 +49,32 @@ void main() {
       'generateNextToken',
       'generateNextToken',
     ]);
+  });
+
+  test('listLocalModels parses native list response', () async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(methodChannel, (call) async {
+          expect(call.method, 'listLocalModels');
+          return [
+            {
+              'path': '/app/models/Hy-MT2-1.8B-1.25Bit.gguf',
+              'name': 'Hy-MT2-1.8B-1.25Bit.gguf',
+              'sizeBytes': 461373440,
+            },
+          ];
+        });
+
+    final translatorChannel = TranslatorChannel(channel: methodChannel);
+    final models = await translatorChannel.listLocalModels();
+
+    expect(models, hasLength(1));
+    expect(
+      models.single,
+      const LocalModelInfo(
+        path: '/app/models/Hy-MT2-1.8B-1.25Bit.gguf',
+        name: 'Hy-MT2-1.8B-1.25Bit.gguf',
+        sizeBytes: 461373440,
+      ),
+    );
   });
 }
