@@ -15,16 +15,20 @@ void main() {
     expect(model.sizeBytes, 461373440);
   });
 
-  test('supported models include Hy-MT2 1.25bit HF-Mirror default', () {
-    expect(supportedTranslatorModels, hasLength(1));
-    final model = supportedTranslatorModels.single;
+  test('supported models include Hy-MT2 and Hy-MT1.5 1.25bit', () {
+    expect(supportedTranslatorModels, hasLength(2));
 
-    expect(model.id, 'hymt2_18b_125bit');
-    expect(model.filename, 'Hy-MT2-1.8B-1.25Bit.gguf');
+    final mt2 = supportedTranslatorModels[0];
+    expect(mt2.id, 'hymt2_18b_125bit');
+    expect(mt2.filename, 'Hy-MT2-1.8B-1.25Bit.gguf');
     expect(
-      model.downloadUrl,
+      mt2.downloadUrl,
       'https://hf-mirror.com/tencent/Hy-MT2-1.8B-1.25Bit-GGUF/resolve/main/Hy-MT2-1.8B-1.25Bit.gguf',
     );
+
+    final mt15 = supportedTranslatorModels[1];
+    expect(mt15.id, 'hymt15_18b_stq10');
+    expect(mt15.filename, 'Hy-MT1.5-1.8B-1.25bit.gguf');
   });
 
   test('state tracks selected and loaded model separately', () {

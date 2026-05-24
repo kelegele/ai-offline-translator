@@ -23,4 +23,12 @@ const supportedTranslatorModels = <SupportedModelInfo>[
         'https://hf-mirror.com/tencent/Hy-MT2-1.8B-1.25Bit-GGUF/resolve/main/Hy-MT2-1.8B-1.25Bit.gguf',
     expectedSizeLabel: '440 MB',
   ),
+  SupportedModelInfo(
+    id: 'hymt15_18b_stq10',
+    displayName: 'Hy-MT1.5 1.8B 1.25bit',
+    filename: 'Hy-MT1.5-1.8B-1.25bit.gguf',
+    downloadUrl:
+        'https://hf-mirror.com/AngelSlim/Hy-MT1.5-1.8B-1.25bit-GGUF/resolve/main/Hy-MT1.5-1.8B-1.25bit.gguf',
+    expectedSizeLabel: '440 MB',
+  ),
 ];

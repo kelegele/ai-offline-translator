@@ -445,7 +445,7 @@ void main() {
     final controller = TranslatorController(
       service: const MockTranslatorService(),
     );
-    final model = supportedTranslatorModels.single;
+    final model = supportedTranslatorModels.first;
 
     controller.beginModelDownload(modelId: model.id);
 

@@ -30,8 +30,14 @@ class TranslatorChannel {
     return result ?? const {};
   }
 
-  Future<String?> downloadDefaultModel() {
-    return _channel.invokeMethod<String>('downloadDefaultModel');
+  Future<String?> downloadModel({
+    required String url,
+    required String filename,
+  }) {
+    return _channel.invokeMethod<String>('downloadModel', {
+      'url': url,
+      'filename': filename,
+    });
   }
 
   Future<void> cancelModelDownload() async {

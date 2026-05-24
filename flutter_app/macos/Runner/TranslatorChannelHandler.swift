@@ -22,6 +22,7 @@ final class TranslatorChannelHandler: NSObject {
     delegateQueue: nil
   )
   private var pendingDownloadResult: FlutterResult?
+  private var pendingDownloadFilename: String?
 
   func register(with controller: FlutterViewController) {
     let channel = FlutterMethodChannel(name: channelName, binaryMessenger: controller.engine.binaryMessenger)
@@ -38,8 +39,8 @@ final class TranslatorChannelHandler: NSObject {
       importModelFile(result: result)
     case "getDefaultModelInfo":
       result(defaultModelInfo())
-    case "downloadDefaultModel":
-      downloadDefaultModel(result: result)
+    case "downloadModel":
+      handleDownloadModel(call: call, result: result)
     case "cancelModelDownload":
       cancelModelDownload()
       result(nil)
@@ -277,9 +278,17 @@ final class TranslatorChannelHandler: NSObject {
     return try modelsDirectoryURL().appendingPathComponent(defaultModelFilename)
   }
 
-  private func downloadDefaultModel(result: @escaping FlutterResult) {
+  private func handleDownloadModel(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let urlString = args["url"] as? String,
+          let filename = args["filename"] as? String,
+          let remoteURL = URL(string: urlString) else {
+      result(FlutterError(code: "bad_args", message: "缺少下载参数", details: nil))
+      return
+    }
+
     do {
-      let destinationURL = try defaultModelDestinationURL()
+      let destinationURL = try modelsDirectoryURL().appendingPathComponent(filename)
       if FileManager.default.fileExists(atPath: destinationURL.path),
          isValidGGUF(at: destinationURL, minimumBytes: minimumModelBytes) {
         updateDownloadStatus(
@@ -303,15 +312,16 @@ final class TranslatorChannelHandler: NSObject {
     }
 
     pendingDownloadResult = result
+    pendingDownloadFilename = filename
     updateDownloadStatus(
       state: "downloading",
       receivedBytes: 0,
       totalBytes: 0,
-      message: "正在连接 ModelScope",
+      message: "正在连接",
       path: nil
     )
-    NSLog("[Translator] starting download from %@", defaultModelURL.absoluteString)
-    let task = downloadSession.downloadTask(with: defaultModelURL)
+    NSLog("[Translator] starting download from %@", remoteURL.absoluteString)
+    let task = downloadSession.downloadTask(with: remoteURL)
     downloadTask = task
     task.resume()
   }
@@ -379,7 +389,7 @@ extension TranslatorChannelHandler: URLSessionDownloadDelegate {
     didFinishDownloadingTo location: URL
   ) {
     do {
-      let destinationURL = try defaultModelDestinationURL()
+      let destinationURL = try modelsDirectoryURL().appendingPathComponent(pendingDownloadFilename ?? "model.gguf")
       guard isValidGGUF(at: location, minimumBytes: minimumModelBytes) else {
         throw NSError(domain: "Translator", code: 21, userInfo: [NSLocalizedDescriptionKey: "下载文件不是有效的 GGUF 模型。"])
       }

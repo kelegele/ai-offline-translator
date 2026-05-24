@@ -23,11 +23,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('模型'), findsOneWidget);
-    expect(find.text('当前模型'), findsOneWidget);
-    expect(find.text('未选择模型'), findsOneWidget);
+    expect(find.text('当前模型'), findsNothing);
     expect(find.text('导入'), findsOneWidget);
     expect(find.widgetWithText(OutlinedButton, '下载'), findsNothing);
-    expect(find.byTooltip('下载模型'), findsOneWidget);
+    expect(find.byTooltip('下载模型'), findsNWidgets(2));
   });
 
   testWidgets('language menu matches HyMT 1.25bit supported languages', (

@@ -78,8 +78,8 @@ class _TranslatorPageState extends State<TranslatorPage> {
       builder: (sheetContext) => _ModelSheet(
         controller: _controller,
         onImport: () => _importModelFromSheet(sheetContext),
-        onDownloadSupportedModel: (_) {
-          _downloadDefaultModel();
+        onDownloadSupportedModel: (model) {
+          _downloadModel(model);
         },
         onLoad: () async {
           await _controller.loadSelectedModel();
@@ -129,13 +129,14 @@ class _TranslatorPageState extends State<TranslatorPage> {
     }
   }
 
-  Future<void> _downloadDefaultModel() async {
-    _controller.beginModelDownload(
-      modelId: supportedTranslatorModels.single.id,
-    );
+  Future<void> _downloadModel(SupportedModelInfo model) async {
+    _controller.beginModelDownload(modelId: model.id);
     _startDownloadPolling();
     try {
-      final path = await _translatorChannel.downloadDefaultModel();
+      final path = await _translatorChannel.downloadModel(
+        url: model.downloadUrl,
+        filename: model.filename,
+      );
       _downloadPollTimer?.cancel();
       if (path == null || path.trim().isEmpty) {
         _controller.cancelModelDownload();
@@ -1092,7 +1093,6 @@ class _ModelSheetState extends State<_ModelSheet> {
   @override
   Widget build(BuildContext context) {
     final state = widget.controller.state;
-    final modelName = state.modelState.displayName ?? '未选择模型';
     final isLoaded = state.modelState.isReady;
     final hasSelection = state.modelState.hasSelection;
     final isDownloading = state.modelDownloadState.isDownloading;
@@ -1122,45 +1122,6 @@ class _ModelSheetState extends State<_ModelSheet> {
             ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 12),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(AppSpacing.md),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              border: Border.all(color: AppColors.hairline),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '当前模型',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.labelSmall?.copyWith(color: AppColors.steel),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  modelName,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: isLoaded ? AppColors.successText : AppColors.ink,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  state.modelState.errorMessage ??
-                      (hasSelection ? '已就绪，可以加载' : '请导入或下载模型'),
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: state.modelState.errorMessage != null
-                        ? AppColors.errorText
-                        : AppColors.steel,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
           ...state.modelState.supportedModels.map((supported) {
             LocalModelInfo? local;
             for (final model in state.modelState.availableModels) {

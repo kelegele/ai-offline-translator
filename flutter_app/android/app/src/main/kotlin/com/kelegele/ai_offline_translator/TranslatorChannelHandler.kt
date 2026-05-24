@@ -73,7 +73,7 @@ class TranslatorChannelHandler(
                 "importModelFile" -> importModelFile(res)
                 "importModelFromUri" -> handleImportModelFromUri(call.arguments, res)
                 "getDefaultModelInfo" -> res.success(defaultModelInfo())
-                "downloadDefaultModel" -> handleDownloadDefaultModel(res)
+                "downloadModel" -> handleDownloadModel(call.arguments, res)
                 "cancelModelDownload" -> handleCancelDownload(res)
                 "getModelDownloadStatus" -> res.success(downloadStatus)
                 "findLocalModel" -> findLocalModel(res)
@@ -228,8 +228,16 @@ class TranslatorChannelHandler(
 
     // --- ModelScope downloader ---
 
-    private fun handleDownloadDefaultModel(result: MethodChannel.Result) {
-        val destFile = File(modelsDir(), DEFAULT_MODEL_FILENAME)
+    private fun handleDownloadModel(args: Any?, result: MethodChannel.Result) {
+        val map = args as? Map<String, Any>
+        val url = map?.get("url") as? String
+        val filename = map?.get("filename") as? String
+        if (url == null || filename == null) {
+            result.error("bad_args", "缺少下载参数", null)
+            return
+        }
+
+        val destFile = File(modelsDir(), filename)
         if (destFile.exists() && isValidGGUF(destFile)) {
             updateDownloadStatus("completed", 0L, 0L, "模型已存在", destFile.absolutePath)
             result.success(destFile.absolutePath)
@@ -241,13 +249,13 @@ class TranslatorChannelHandler(
             return
         }
 
-        updateDownloadStatus("downloading", 0L, 0L, "正在连接 ModelScope", null)
+        updateDownloadStatus("downloading", 0L, 0L, "正在连接", null)
         val pendingResult = MethodChannelResultHolder(result)
 
         downloadJob = DownloadJob(
-            url = DEFAULT_MODEL_URL,
+            url = url,
             destFile = destFile,
-            tempFile = File(modelsDir(), "$DEFAULT_MODEL_FILENAME.tmp"),
+            tempFile = File(modelsDir(), "$filename.tmp"),
             onProgress = { received, total, message ->
                 mainHandler.post {
                     updateDownloadStatus("downloading", received, total, message, null)
