@@ -1,6 +1,9 @@
 import 'dart:async';
 
+import 'package:ai_offline_translator/features/translator/local_model_info.dart';
+import 'package:ai_offline_translator/features/translator/model_download_state.dart';
 import 'package:ai_offline_translator/features/translator/model_selection_state.dart';
+import 'package:ai_offline_translator/features/translator/supported_model_info.dart';
 import 'package:ai_offline_translator/features/translator/translator_controller.dart';
 import 'package:ai_offline_translator/features/translator/translator_service.dart';
 import 'package:ai_offline_translator/features/translator/translator_state.dart';
@@ -98,6 +101,7 @@ class RecordingTranslatorService implements TranslatorService {
   final String translateResult;
   String? loadedPath;
   int cancelCount = 0;
+  int unloadCount = 0;
   String modelStatus = '未加载模型';
 
   @override
@@ -139,6 +143,7 @@ class RecordingTranslatorService implements TranslatorService {
 
   @override
   Future<void> unloadModel() async {
+    unloadCount += 1;
     loadedPath = null;
     modelStatus = '未加载模型';
   }
@@ -367,5 +372,87 @@ void main() {
 
     expect(controller.state.status, TranslatorStatus.error);
     expect(controller.state.modelState.errorMessage, '模型下载失败，请检查网络后重试。');
+  });
+
+  test('refreshLocalModels selects preferred downloaded model', () {
+    final controller = TranslatorController(
+      service: const MockTranslatorService(),
+    );
+    const first = LocalModelInfo(
+      path: '/app/models/a.gguf',
+      name: 'a.gguf',
+      sizeBytes: 10,
+    );
+    const second = LocalModelInfo(
+      path: '/app/models/Hy-MT2-1.8B-1.25Bit.gguf',
+      name: 'Hy-MT2-1.8B-1.25Bit.gguf',
+      sizeBytes: 461373440,
+    );
+
+    controller.refreshLocalModels(
+      [first, second],
+      preferredPath: second.path,
+    );
+
+    expect(controller.state.modelState.availableModels, [second, first]);
+    expect(controller.state.modelState.selectedPath, second.path);
+    expect(controller.state.modelState.displayName, second.name);
+  });
+
+  test('selectLocalModel updates selected model without marking it loaded', () {
+    final controller = TranslatorController(
+      service: const MockTranslatorService(),
+    );
+    const model = LocalModelInfo(
+      path: '/app/models/Hy-MT2-1.8B-1.25Bit.gguf',
+      name: 'Hy-MT2-1.8B-1.25Bit.gguf',
+      sizeBytes: 461373440,
+    );
+
+    controller.selectLocalModel(model);
+
+    expect(controller.state.modelState.selectedPath, model.path);
+    expect(controller.state.modelState.loadedPath, isNull);
+    expect(controller.state.modelState.status, ModelLifecycleStatus.selected);
+  });
+
+  test('loading another selected model unloads previous model first', () async {
+    final service = RecordingTranslatorService();
+    final controller = TranslatorController(service: service);
+    const first = LocalModelInfo(
+      path: '/app/models/a.gguf',
+      name: 'a.gguf',
+      sizeBytes: 10,
+    );
+    const second = LocalModelInfo(
+      path: '/app/models/b.gguf',
+      name: 'b.gguf',
+      sizeBytes: 20,
+    );
+
+    controller.selectLocalModel(first);
+    await controller.loadSelectedModel();
+    controller.selectLocalModel(second);
+    await controller.loadSelectedModel();
+
+    expect(service.cancelCount, 0);
+    expect(service.unloadCount, 1);
+    expect(service.loadedPath, second.path);
+    expect(controller.state.modelState.loadedPath, second.path);
+  });
+
+  test('beginModelDownload tracks supported model id', () {
+    final controller = TranslatorController(
+      service: const MockTranslatorService(),
+    );
+    final model = supportedTranslatorModels.single;
+
+    controller.beginModelDownload(modelId: model.id);
+
+    expect(controller.state.modelState.downloadingModelId, model.id);
+    expect(
+      controller.state.modelDownloadState.status,
+      ModelDownloadStatus.downloading,
+    );
   });
 }

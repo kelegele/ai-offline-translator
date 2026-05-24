@@ -20,6 +20,17 @@ class LocalModelInfo {
   final String name;
   final int sizeBytes;
 
+  @override
+  bool operator ==(Object other) {
+    return other is LocalModelInfo &&
+        other.path == path &&
+        other.name == name &&
+        other.sizeBytes == sizeBytes;
+  }
+
+  @override
+  int get hashCode => Object.hash(path, name, sizeBytes);
+
   static String _basename(String path) {
     final normalized = path.replaceAll('\\', '/');
     final slash = normalized.lastIndexOf('/');

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 
+import 'local_model_info.dart';
 import 'model_download_state.dart';
 import 'model_selection_state.dart';
 import 'translator_service.dart';
@@ -38,6 +39,62 @@ class TranslatorController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void refreshLocalModels(
+    List<LocalModelInfo> models, {
+    String? preferredPath,
+  }) {
+    final sorted = [...models]..sort((a, b) => a.name.compareTo(b.name));
+    LocalModelInfo? selected;
+    for (final model in sorted) {
+      if (model.path == preferredPath) {
+        selected = model;
+        break;
+      }
+    }
+    if (selected == null) {
+      for (final model in sorted) {
+        if (model.path == _state.modelState.selectedPath) {
+          selected = model;
+          break;
+        }
+      }
+    }
+    selected ??= sorted.isEmpty ? null : sorted.first;
+
+    _state = _state.copyWith(
+      runtimeStatus: selected == null ? '未加载模型' : '已选择模型，等待加载',
+      modelState: _state.modelState.copyWith(
+        availableModels: sorted,
+        selectedPath: selected?.path,
+        displayName: selected?.name,
+        status: selected == null
+            ? ModelLifecycleStatus.noneSelected
+            : ModelLifecycleStatus.selected,
+        clearSelection: selected == null,
+        clearError: true,
+      ),
+      clearError: true,
+    );
+    notifyListeners();
+  }
+
+  void selectLocalModel(LocalModelInfo model) {
+    final isLoaded = model.path == _state.modelState.loadedPath;
+    _state = _state.copyWith(
+      runtimeStatus: isLoaded ? '本地模型已就绪（原生引擎）' : '已选择模型，等待加载',
+      modelState: _state.modelState.copyWith(
+        status: isLoaded
+            ? ModelLifecycleStatus.ready
+            : ModelLifecycleStatus.selected,
+        selectedPath: model.path,
+        displayName: model.name,
+        clearError: true,
+      ),
+      clearError: true,
+    );
+    notifyListeners();
+  }
+
   void selectModel(String path) {
     final trimmed = path.trim();
     if (trimmed.isEmpty) {
@@ -52,23 +109,26 @@ class TranslatorController extends ChangeNotifier {
 
     _state = _state.copyWith(
       runtimeStatus: '已选择模型，等待加载',
-      modelState: ModelSelectionState(
+      modelState: _state.modelState.copyWith(
         status: ModelLifecycleStatus.selected,
         selectedPath: trimmed,
         displayName: trimmed.split('/').last,
+        clearLoadedPath: _state.modelState.loadedPath != trimmed,
+        clearError: true,
       ),
       clearError: true,
     );
     notifyListeners();
   }
 
-  void beginModelDownload() {
+  void beginModelDownload({String? modelId}) {
     _state = _state.copyWith(
       runtimeStatus: '正在下载模型',
       modelDownloadState: const ModelDownloadState(
         status: ModelDownloadStatus.downloading,
         message: '正在连接 ModelScope',
       ),
+      modelState: _state.modelState.copyWith(downloadingModelId: modelId),
       clearError: true,
     );
     notifyListeners();
@@ -100,6 +160,7 @@ class TranslatorController extends ChangeNotifier {
         path: path,
         message: '模型已下载',
       ),
+      modelState: _state.modelState.copyWith(clearDownloadingModel: true),
       clearError: true,
     );
     notifyListeners();
@@ -112,6 +173,7 @@ class TranslatorController extends ChangeNotifier {
         status: ModelDownloadStatus.cancelled,
         message: '下载已取消。',
       ),
+      modelState: _state.modelState.copyWith(clearDownloadingModel: true),
     );
     notifyListeners();
   }
@@ -127,6 +189,7 @@ class TranslatorController extends ChangeNotifier {
       modelState: _state.modelState.copyWith(
         status: ModelLifecycleStatus.failed,
         errorMessage: message,
+        clearDownloadingModel: true,
       ),
       errorMessage: message,
     );
@@ -160,6 +223,10 @@ class TranslatorController extends ChangeNotifier {
     notifyListeners();
 
     try {
+      if (_state.modelState.loadedPath != null &&
+          _state.modelState.loadedPath != path) {
+        await _service.unloadModel();
+      }
       await _service.loadModel(path: path, nCtx: 256, nThreads: 2);
       final runtimeStatus = await _service.getModelStatus();
       _state = _state.copyWith(
@@ -169,6 +236,7 @@ class TranslatorController extends ChangeNotifier {
         runtimeStatus: runtimeStatus,
         modelState: _state.modelState.copyWith(
           status: ModelLifecycleStatus.ready,
+          loadedPath: path,
           clearError: true,
         ),
         clearError: true,
@@ -283,7 +351,13 @@ class TranslatorController extends ChangeNotifier {
   Future<void> unloadModel() async {
     await _service.unloadModel();
     _state = _state.copyWith(
-      modelState: const ModelSelectionState(),
+      modelState: _state.modelState.copyWith(
+        status: _state.modelState.hasSelection
+            ? ModelLifecycleStatus.selected
+            : ModelLifecycleStatus.noneSelected,
+        clearLoadedPath: true,
+        clearError: true,
+      ),
       runtimeStatus: "未加载模型",
     );
     notifyListeners();
