@@ -5,8 +5,8 @@ import UniformTypeIdentifiers
 final class TranslatorChannelHandler: NSObject {
   private let channelName = "ai_offline_translator/translator"
   private let bridge = TranslatorBridge()
-  private let defaultModelFilename = "Hy-MT1.5-1.8B-STQ1_0.gguf"
-  private let defaultModelURL = URL(string: "https://modelscope.cn/models/AngelSlim/Hy-MT1.5-1.8B-1.25bit-GGUF/resolve/master/Hy-MT1.5-1.8B-STQ1_0.gguf")!
+  private let defaultModelFilename = "Hy-MT2-1.8B-1.25Bit.gguf"
+  private let defaultModelURL = URL(string: "https://hf-mirror.com/tencent/Hy-MT2-1.8B-1.25Bit-GGUF/resolve/main/Hy-MT2-1.8B-1.25Bit.gguf")!
   private let minimumModelBytes: Int64 = 100 * 1024 * 1024
   private var downloadTask: URLSessionDownloadTask?
   private var downloadStatus: [String: Any] = [
@@ -252,8 +252,8 @@ final class TranslatorChannelHandler: NSObject {
 
   private func defaultModelInfo() -> [String: Any] {
     return [
-      "id": "hymt15_18b_stq10",
-      "displayName": "Hy-MT1.5 1.8B STQ1_0",
+      "id": "hymt2_18b_125bit",
+      "displayName": "Hy-MT2 1.8B 1.25bit",
       "filename": defaultModelFilename,
       "downloadUrl": defaultModelURL.absoluteString
     ]

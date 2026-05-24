@@ -21,9 +21,9 @@ class TranslatorChannelHandler(
     companion object {
         private const val CHANNEL_NAME = "ai_offline_translator/translator"
         private const val MODELS_DIR = "models"
-        private const val DEFAULT_MODEL_FILENAME = "Hy-MT1.5-1.8B-STQ1_0.gguf"
+        private const val DEFAULT_MODEL_FILENAME = "Hy-MT2-1.8B-1.25Bit.gguf"
         private const val DEFAULT_MODEL_URL =
-            "https://modelscope.cn/models/AngelSlim/Hy-MT1.5-1.8B-1.25bit-GGUF/resolve/master/Hy-MT1.5-1.8B-STQ1_0.gguf"
+            "https://hf-mirror.com/tencent/Hy-MT2-1.8B-1.25Bit-GGUF/resolve/main/Hy-MT2-1.8B-1.25Bit.gguf"
         private const val MINIMUM_MODEL_BYTES: Long = 100 * 1024 * 1024
         private const val ENGINE_TAG = "AITranslatorEngine"
         private val GGUF_MAGIC = byteArrayOf(0x47, 0x47, 0x55, 0x46)
@@ -203,8 +203,8 @@ class TranslatorChannelHandler(
 
     private fun defaultModelInfo(): Map<String, Any> {
         return mapOf(
-            "id" to "hymt15_18b_stq10",
-            "displayName" to "Hy-MT1.5 1.8B STQ1_0",
+            "id" to "hymt2_18b_125bit",
+            "displayName" to "Hy-MT2 1.8B 1.25bit",
             "filename" to DEFAULT_MODEL_FILENAME,
             "downloadUrl" to DEFAULT_MODEL_URL,
         )
