@@ -310,6 +310,7 @@ final class TranslatorChannelHandler: NSObject {
       message: "正在连接 ModelScope",
       path: nil
     )
+    NSLog("[Translator] starting download from %@", defaultModelURL.absoluteString)
     let task = downloadSession.downloadTask(with: defaultModelURL)
     downloadTask = task
     task.resume()
@@ -330,9 +331,9 @@ final class TranslatorChannelHandler: NSObject {
   }
 
   private func isValidGGUF(at url: URL, minimumBytes: Int64 = 0) -> Bool {
-    guard url.pathExtension.lowercased() == "gguf" else { return false }
-    guard let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize,
-          Int64(size) >= minimumBytes else { return false }
+    guard let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
+          let fileSize = attrs[.size] as? Int64 ?? (attrs[.size] as? Int).map { Int64($0) },
+          fileSize >= minimumBytes else { return false }
     guard let handle = try? FileHandle(forReadingFrom: url) else { return false }
     defer { handle.closeFile() }
     return handle.readData(ofLength: 4) == Data([0x47, 0x47, 0x55, 0x46])
@@ -399,6 +400,7 @@ extension TranslatorChannelHandler: URLSessionDownloadDelegate {
         self.downloadTask = nil
       }
     } catch {
+      NSLog("[Translator] download finish error: %@", error.localizedDescription)
       updateDownloadStatus(
         state: "failed",
         receivedBytes: 0,
@@ -421,6 +423,8 @@ extension TranslatorChannelHandler: URLSessionDownloadDelegate {
   ) {
     guard let error = error as NSError? else { return }
     if error.code == NSURLErrorCancelled { return }
+    NSLog("[Translator] download failed: domain=%@ code=%ld localized=%@",
+      error.domain, error.code, error.localizedDescription)
     updateDownloadStatus(
       state: "failed",
       receivedBytes: 0,
