@@ -10,6 +10,8 @@ import '../../design/app_spacing.dart';
 import 'macos_translator_service.dart';
 import 'model_download_state.dart';
 import 'model_selection_state.dart';
+import 'local_model_info.dart';
+import 'supported_model_info.dart';
 import 'translator_channel.dart';
 import 'translator_controller.dart';
 import 'translator_state.dart';
@@ -41,14 +43,10 @@ class _TranslatorPageState extends State<TranslatorPage> {
 
   Future<void> _autoLoadLocalModel() async {
     try {
-      final info = await _translatorChannel.findLocalModel();
-      if (info == null) return;
-      final path = info['path'] as String?;
-      if (path == null || path.trim().isEmpty) return;
-      _controller.selectModel(path);
-      _controller.loadSelectedModel();
+      final models = await _translatorChannel.listLocalModels();
+      _controller.refreshLocalModels(models);
     } on Object {
-      // silently ignore — user can manually import/load
+      _controller.refreshLocalModels(const []);
     }
   }
 
@@ -71,7 +69,6 @@ class _TranslatorPageState extends State<TranslatorPage> {
   // --- Model sheet (stays open during import) ---
 
   void _showModelSheet() {
-    // state read below // used in builder
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -81,7 +78,7 @@ class _TranslatorPageState extends State<TranslatorPage> {
       builder: (sheetContext) => _ModelSheet(
         controller: _controller,
         onImport: () => _importModelFromSheet(sheetContext),
-        onDownload: () {
+        onDownloadSupportedModel: (_) {
           _downloadDefaultModel();
         },
         onLoad: () async {
@@ -109,9 +106,9 @@ class _TranslatorPageState extends State<TranslatorPage> {
       path = await _translatorChannel.importModelFile();
     }
     if (path != null && path.trim().isNotEmpty) {
-      _controller.selectModel(path);
+      final models = await _translatorChannel.listLocalModels();
+      _controller.refreshLocalModels(models, preferredPath: path);
     }
-    // sheet stays open so user can see model name and click 加载
   }
 
   Future<String?> _importAndroidModel() async {
@@ -133,7 +130,9 @@ class _TranslatorPageState extends State<TranslatorPage> {
   }
 
   Future<void> _downloadDefaultModel() async {
-    _controller.beginModelDownload();
+    _controller.beginModelDownload(
+      modelId: supportedTranslatorModels.single.id,
+    );
     _startDownloadPolling();
     try {
       final path = await _translatorChannel.downloadDefaultModel();
@@ -142,6 +141,8 @@ class _TranslatorPageState extends State<TranslatorPage> {
         _controller.cancelModelDownload();
         return;
       }
+      final models = await _translatorChannel.listLocalModels();
+      _controller.refreshLocalModels(models, preferredPath: path);
       _controller.startModelDownload(path);
     } on Object {
       _downloadPollTimer?.cancel();
@@ -193,90 +194,79 @@ class _TranslatorPageState extends State<TranslatorPage> {
           backgroundColor: AppColors.canvas,
           resizeToAvoidBottomInset: false,
           body: Column(
-              children: [
-                _buildNavBar(state),
-                // Language bar + action buttons (intrinsic height)
-                Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    hPadding,
-                    AppSpacing.md,
-                    hPadding,
-                    0,
-                  ),
+            children: [
+              _buildNavBar(state),
+              // Language bar + action buttons (intrinsic height)
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  hPadding,
+                  AppSpacing.md,
+                  hPadding,
+                  0,
+                ),
+                child: Column(
+                  children: [
+                    _LangBar(
+                      sourceLanguage: state.sourceLanguage,
+                      targetLanguage: state.targetLanguage,
+                      onSourceChanged: _controller.updateSourceLanguage,
+                      onTargetChanged: _controller.updateTargetLanguage,
+                      onSwap: () {
+                        _controller.updateSourceLanguage(state.targetLanguage);
+                        _controller.updateTargetLanguage(state.sourceLanguage);
+                      },
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                  ],
+                ),
+              ),
+              // Input & Output panels. Output gets slightly more reading space.
+              Expanded(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: hPadding),
                   child: Column(
                     children: [
-                      _LangBar(
-                        sourceLanguage: state.sourceLanguage,
-                        targetLanguage: state.targetLanguage,
-                        onSourceChanged:
-                            _controller.updateSourceLanguage,
-                        onTargetChanged:
-                            _controller.updateTargetLanguage,
-                        onSwap: () {
-                          _controller.updateSourceLanguage(
-                            state.targetLanguage,
-                          );
-                          _controller.updateTargetLanguage(
-                            state.sourceLanguage,
-                          );
-                        },
+                      Expanded(
+                        flex: 9,
+                        child: _InputPanel(
+                          controller: _textController,
+                          characterCount: _characterCount,
+                          enabled: state.status != TranslatorStatus.translating,
+                          onChanged: _controller.updateInput,
+                        ),
                       ),
-                      const SizedBox(height: AppSpacing.md),
+                      const SizedBox(height: AppSpacing.sm),
+                      SizedBox(
+                        width: double.infinity,
+                        child: _TranslateButton(
+                          state: state,
+                          onTranslate: () =>
+                              _controller.translate(_textController.text),
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      Expanded(flex: 11, child: _OutputPanel(state: state)),
                     ],
                   ),
                 ),
-                // Input & Output panels. Output gets slightly more reading space.
-                Expanded(
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: hPadding),
-                    child: Column(
-                      children: [
-                        Expanded(
-                          flex: 9,
-                          child: _InputPanel(
-                            controller: _textController,
-                            characterCount: _characterCount,
-                            enabled:
-                                state.status != TranslatorStatus.translating,
-                            onChanged: _controller.updateInput,
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.sm),
-                        SizedBox(
-                          width: double.infinity,
-                          child: _TranslateButton(state: state,
-                            onTranslate: () => _controller.translate(
-                              _textController.text,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.sm),
-                        Expanded(
-                          flex: 11,
-                          child: _OutputPanel(state: state),
-                        ),
-                      ],
-                    ),
+              ),
+              // Disclaimer
+              Padding(
+                padding: EdgeInsets.only(
+                  top: AppSpacing.sm,
+                  bottom: AppSpacing.md + MediaQuery.of(context).padding.bottom,
+                ),
+                child: Center(
+                  child: Text(
+                    '结果由 AI 生成，仅供参考',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.labelSmall?.copyWith(color: AppColors.muted),
                   ),
                 ),
-                // Disclaimer
-                Padding(
-                  padding: EdgeInsets.only(
-                    top: AppSpacing.sm,
-                    bottom:
-                        AppSpacing.md +
-                        MediaQuery.of(context).padding.bottom,
-                  ),
-                  child: Center(
-                    child: Text(
-                      '结果由 AI 生成，仅供参考',
-                      style: Theme.of(context).textTheme.labelSmall
-                          ?.copyWith(color: AppColors.muted),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
+          ),
         );
       },
     );
@@ -397,11 +387,7 @@ class _TranslatorPageState extends State<TranslatorPage> {
                       ),
                     ),
                     const SizedBox(width: 4),
-                    Icon(
-                      Icons.keyboard_arrow_down,
-                      size: 16,
-                      color: textColor,
-                    ),
+                    Icon(Icons.keyboard_arrow_down, size: 16, color: textColor),
                   ],
                 ),
               ),
@@ -576,8 +562,8 @@ class _LangBar extends StatelessWidget {
                 Text(
                   isSource ? '源语言' : '目标语言',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Expanded(
@@ -732,7 +718,9 @@ class _InputPanelState extends State<_InputPanel> {
             textAlignVertical: TextAlignVertical.top,
             decoration: InputDecoration(
               hintText: '输入要翻译的内容',
-              hintStyle: TextStyle(color: AppColors.muted.withValues(alpha: 0.6)),
+              hintStyle: TextStyle(
+                color: AppColors.muted.withValues(alpha: 0.6),
+              ),
               border: InputBorder.none,
               contentPadding: const EdgeInsets.fromLTRB(14, 12, 44, 28),
             ),
@@ -888,7 +876,10 @@ class _OutputPanelState extends State<_OutputPanel> {
   void _ensureTypewriter() {
     if (_typewriterTimer != null) return;
     void tick() {
-      if (!mounted) { _stopTypewriter(); return; }
+      if (!mounted) {
+        _stopTypewriter();
+        return;
+      }
       if (_charIndex < _lastSourceText.length) {
         _charIndex++;
         setState(() {
@@ -902,6 +893,7 @@ class _OutputPanelState extends State<_OutputPanel> {
         _typewriterTimer = null;
       }
     }
+
     tick();
   }
 
@@ -999,13 +991,19 @@ class _OutputPanelState extends State<_OutputPanel> {
                   height: 28,
                   child: IconButton(
                     onPressed: () {
-                      Clipboard.setData(ClipboardData(text: widget.state.outputText));
+                      Clipboard.setData(
+                        ClipboardData(text: widget.state.outputText),
+                      );
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
                           content: Text('已复制译文'),
                           duration: Duration(seconds: 1),
                           behavior: SnackBarBehavior.floating,
-                          margin: EdgeInsets.only(bottom: 80, left: 40, right: 40),
+                          margin: EdgeInsets.only(
+                            bottom: 80,
+                            left: 40,
+                            right: 40,
+                          ),
                         ),
                       );
                     },
@@ -1041,7 +1039,7 @@ class _ModelSheet extends StatefulWidget {
   const _ModelSheet({
     required this.controller,
     required this.onImport,
-    required this.onDownload,
+    required this.onDownloadSupportedModel,
     required this.onLoad,
     required this.onUnload,
     required this.onCancelDownload,
@@ -1049,7 +1047,7 @@ class _ModelSheet extends StatefulWidget {
 
   final TranslatorController controller;
   final VoidCallback onImport;
-  final VoidCallback onDownload;
+  final void Function(SupportedModelInfo) onDownloadSupportedModel;
   final Future<void> Function() onLoad;
   final Future<void> Function() onUnload;
   final VoidCallback onCancelDownload;
@@ -1084,6 +1082,13 @@ class _ModelSheetState extends State<_ModelSheet> {
     if (mounted) setState(() {});
   }
 
+  String _formatBytes(int bytes) {
+    if (bytes <= 0) return '';
+    final mb = bytes / (1024 * 1024);
+    if (mb >= 100) return '\${mb.toStringAsFixed(0)} MB';
+    return '\${mb.toStringAsFixed(1)} MB';
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = widget.controller.state;
@@ -1091,8 +1096,7 @@ class _ModelSheetState extends State<_ModelSheet> {
     final isLoaded = state.modelState.isReady;
     final hasSelection = state.modelState.hasSelection;
     final isDownloading = state.modelDownloadState.isDownloading;
-    final isLoading =
-        state.modelState.status == ModelLifecycleStatus.loading;
+    final isLoading = state.modelState.status == ModelLifecycleStatus.loading;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
@@ -1157,19 +1161,107 @@ class _ModelSheetState extends State<_ModelSheet> {
             ),
           ),
           const SizedBox(height: 14),
+          ...state.modelState.supportedModels.map((supported) {
+            LocalModelInfo? local;
+            for (final model in state.modelState.availableModels) {
+              if (model.name == supported.filename) {
+                local = model;
+                break;
+              }
+            }
+            final isDownloaded = local != null;
+            final isSelected = local?.path == state.modelState.selectedPath;
+            final isLoadedModel = local?.path == state.modelState.loadedPath;
+            final isRowDownloading =
+                state.modelState.downloadingModelId == supported.id &&
+                isDownloading;
+            final subtitle = isDownloaded
+                ? '${_formatBytes(local.sizeBytes)}${isLoadedModel ? ' · 已加载' : ''}'
+                : '${supported.expectedSizeLabel} · 未下载';
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(10),
+                onTap: isDownloaded && !isDownloading && !isLoading
+                    ? () => widget.controller.selectLocalModel(local!)
+                    : null,
+                child: Container(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? AppColors.surfaceSoft
+                        : AppColors.canvas,
+                    border: Border.all(
+                      color: isSelected ? AppColors.ink : AppColors.hairline,
+                    ),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              supported.displayName,
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(fontWeight: FontWeight.w600),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              subtitle,
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
+                                    color: isLoadedModel
+                                        ? AppColors.successText
+                                        : AppColors.steel,
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      if (isRowDownloading)
+                        const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      else if (isDownloaded)
+                        Icon(
+                          isSelected
+                              ? Icons.radio_button_checked
+                              : Icons.radio_button_unchecked,
+                          size: 24,
+                          color: isSelected ? AppColors.ink : AppColors.steel,
+                        )
+                      else
+                        IconButton(
+                          tooltip: '下载模型',
+                          onPressed: (isDownloading || isLoading)
+                              ? null
+                              : () =>
+                                    widget.onDownloadSupportedModel(supported),
+                          icon: const Icon(Icons.download, size: 20),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }),
+          const SizedBox(height: 6),
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
               OutlinedButton.icon(
-                onPressed: (isDownloading || isLoading) ? null : widget.onImport,
+                onPressed: (isDownloading || isLoading)
+                    ? null
+                    : widget.onImport,
                 icon: const Icon(Icons.upload_file, size: 18),
                 label: const Text('导入'),
-              ),
-              OutlinedButton.icon(
-                onPressed: (isDownloading || isLoading) ? null : widget.onDownload,
-                icon: const Icon(Icons.cloud_download, size: 18),
-                label: const Text('下载'),
               ),
               if (isDownloading)
                 OutlinedButton.icon(
@@ -1201,38 +1293,45 @@ class _ModelSheetState extends State<_ModelSheet> {
               ).textTheme.bodySmall?.copyWith(color: AppColors.steel),
             ),
           ],
-          if (state.modelDownloadState.status == ModelDownloadStatus.completed &&
+          if (state.modelDownloadState.status ==
+                  ModelDownloadStatus.completed &&
               !isDownloading) ...[
             const SizedBox(height: 10),
             Row(
               children: [
-                Icon(Icons.check_circle, size: 14, color: AppColors.successText),
+                Icon(
+                  Icons.check_circle,
+                  size: 14,
+                  color: AppColors.successText,
+                ),
                 const SizedBox(width: 6),
                 Text(
                   '模型已下载，请点击「加载」',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.successText,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: AppColors.successText),
                 ),
               ],
             ),
           ],
-          if (state.modelDownloadState.status == ModelDownloadStatus.cancelled) ...[
+          if (state.modelDownloadState.status ==
+              ModelDownloadStatus.cancelled) ...[
             const SizedBox(height: 10),
             Text(
               '下载已取消',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: AppColors.steel,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: AppColors.steel),
             ),
           ],
-          if (state.modelDownloadState.status == ModelDownloadStatus.failed) ...[
+          if (state.modelDownloadState.status ==
+              ModelDownloadStatus.failed) ...[
             const SizedBox(height: 10),
             Text(
               state.modelDownloadState.message,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: AppColors.errorText,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: AppColors.errorText),
             ),
           ],
           const SizedBox(height: 10),
