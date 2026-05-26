@@ -109,6 +109,90 @@ GGUF 校验：
 
 注意：这个结论不等于所有 2bit GGUF 都不可用，只表示当前官方样本和上述公开 loader 组合不可用。
 
+## Hy-MT2 GGUF 记录
+
+截至 2026-05-24，本机已拉取 Hunyuan Hy-MT2 的两个 llama.cpp GGUF 量化仓库：
+
+```bash
+git clone https://huggingface.co/tencent/Hy-MT2-1.8B-2Bit-GGUF models/AngelSlim/Hy-MT2-1.8B-2bit-GGUF
+git clone https://huggingface.co/tencent/Hy-MT2-1.8B-1.25Bit-GGUF models/AngelSlim/Hy-MT2-1.8B-1.25bit-GGUF
+```
+
+标准项目路径：
+
+- `models/AngelSlim/Hy-MT2-1.8B-2bit-GGUF/Hy-MT2-1.8B-2Bit.gguf`
+- `models/AngelSlim/Hy-MT2-1.8B-1.25bit-GGUF/Hy-MT2-1.8B-1.25Bit.gguf`
+
+本机文件检查：
+
+- `Hy-MT2-1.8B-2Bit.gguf`：573 MB，GGUF magic header 正常
+- `Hy-MT2-1.8B-1.25Bit.gguf`：440 MB，GGUF magic header 正常
+
+当前结论：
+
+- `Hy-MT2-1.8B-1.25Bit.gguf` 可以直接进入现有 Application 的“导入模型 -> 加载模型 -> 翻译”技术路径。已用 App 共用 `TranslatorEngine` 验证加载成功，`hello` 最小翻译输出 `你好`。
+- `Hy-MT2-1.8B-2Bit.gguf` 不能用当前固定的 `llama.cpp` submodule 直接加载。当前 submodule 报 tensor offset 不匹配：`tensor 'blk.0.attn_k_norm.weight' has offset 203248672, expected 203572256`。
+- `Hy-MT2-1.8B-2Bit.gguf` 可以通过 `llama.cpp` PR #19357 兼容路径加载。临时构建 `921df044b291d5bd95106d0ed42b91b87e1712c2` 后，App 共用 `TranslatorEngine` 验证加载成功，`hello` 最小翻译输出 `你好`。
+- PR #19357 不能直接替换当前 submodule：它可加载 2bit，但加载 `Hy-MT2-1.8B-1.25Bit.gguf` 失败，报 `tensor 'blk.0.attn_k.weight' has invalid ggml type 42. should be in [0, 41)`。若要一个 App runtime 同时支持 1.25bit 和 2bit，需要合并 PR #22836 的 STQ1_0 支持与 PR #19357 的 q2_0c 支持。
+- 默认下载仍硬编码 `Hy-MT1.5-1.8B-STQ1_0.gguf`，若要把 Hy-MT2 1.25bit 设为默认模型，需要同步更新 macOS / Android 默认下载地址、文件名、README / PRD / setup 脚本。
+- 多语言能力已记录到 PRD，但现有 UI 语言选择仍只覆盖英语 / 中文。要完整使用 Hy-MT2 的 39 种语言，需要扩展语言选择器、语言代码映射和 RTL / 竖排排版处理。
+
+当前 submodule 失败验证：
+
+```bash
+/tmp/translator_engine_smoketest models/AngelSlim/Hy-MT2-1.8B-2bit-GGUF/Hy-MT2-1.8B-2Bit.gguf hello
+```
+
+失败结果：
+
+- `load failed`
+- `tensor 'blk.0.attn_k_norm.weight' has offset 203248672, expected 203572256`
+
+PR #19357 兼容验证：
+
+```bash
+rm -rf /tmp/llama-pr19357
+git clone --depth 1 https://github.com/ggml-org/llama.cpp.git /tmp/llama-pr19357
+git -C /tmp/llama-pr19357 fetch --depth 1 origin pull/19357/head
+git -C /tmp/llama-pr19357 checkout FETCH_HEAD
+cmake -S /tmp/llama-pr19357 -B /tmp/llama-pr19357/build \
+  -DGGML_METAL=OFF \
+  -DGGML_ACCELERATE=ON \
+  -DLLAMA_BUILD_TESTS=OFF \
+  -DLLAMA_BUILD_EXAMPLES=OFF \
+  -DLLAMA_BUILD_TOOLS=ON \
+  -DCMAKE_BUILD_TYPE=Release
+cmake --build /tmp/llama-pr19357/build --target llama-completion -j 6
+```
+
+App 共用 `TranslatorEngine` 验证：
+
+```bash
+clang++ -std=c++17 \
+  scripts/translator_engine_smoketest.cpp \
+  flutter_app/native/translator_engine/translator_engine.cpp \
+  -Iflutter_app/native/translator_engine \
+  -I/tmp/llama-pr19357/include \
+  -I/tmp/llama-pr19357/common \
+  -I/tmp/llama-pr19357/vendor \
+  -I/tmp/llama-pr19357/ggml/include \
+  /tmp/llama-pr19357/build/common/libcommon.a \
+  /tmp/llama-pr19357/build/vendor/cpp-httplib/libcpp-httplib.a \
+  -L/tmp/llama-pr19357/build/bin \
+  -lllama -lggml -lggml-cpu -lggml-base -lggml-blas \
+  -framework Accelerate -lc++ \
+  -Wl,-rpath,/tmp/llama-pr19357/build/bin \
+  -o /tmp/translator_engine_smoketest_pr19357
+
+/tmp/translator_engine_smoketest_pr19357 models/AngelSlim/Hy-MT2-1.8B-2bit-GGUF/Hy-MT2-1.8B-2Bit.gguf hello
+```
+
+验证结果：
+
+- `Hy-MT2-1.8B-1.25Bit.gguf`：`load ok`，`translation: 你好`
+- `Hy-MT2-1.8B-2Bit.gguf` + PR #19357：`load ok`，`translation: 你好`
+- `Hy-MT2-1.8B-1.25Bit.gguf` + PR #19357：`load failed`，`invalid ggml type 42`
+
 ## 作者本机历史路径
 
 以下路径只用于追溯验证记录，不是项目标准路径：

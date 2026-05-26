@@ -112,6 +112,7 @@ llama.cpp 以**静态库**形式编译，直接链接进 App 包：
 
 - **macOS**：用于桌面体验和快速验证，支持模型导入、下载、加载、流式翻译和 DMG 分发。
 - **Android**：移动端主线，支持 arm64-v8a 原生推理、模型导入/下载、沉浸式 UI 和 APK 分发。
+- **Hy-MT2 预研**：已在本机拉取 `Hy-MT2-1.8B-1.25bit-GGUF` 与 `Hy-MT2-1.8B-2bit-GGUF`，并将 Hy-MT2 支持语言清单补充到 PRD。`1.25bit` 已通过当前 App 共用 `TranslatorEngine` 最小加载与翻译验证；`2bit` 需 `llama.cpp` PR #19357 兼容路径，也已在临时构建中通过验证。注意 PR #19357 不能直接替换当前 submodule，否则 `1.25bit` 会失效；同时支持两者需要合并 PR #22836 与 PR #19357。
 
 下一阶段：
 

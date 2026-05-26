@@ -90,6 +90,8 @@ PR #22836 的核心是为 llama.cpp / ggml 增加一种新量化格式：`STQ1_0
 - 不能把这个 2bit GGUF 当成 STQ1_0 支持验证样本
 - 当前问题更像这份 GGUF 与当前 loader / writer 组合不兼容，不等于所有 2bit GGUF 都不兼容
 - PR #22836 的边界是 `STQ1_0` / 1.25bit 支持，不应被表述为 Hy-MT 2bit 支持
+- Hy-MT2 2bit 使用 `q2_0c`，官方页面指向 `llama.cpp` PR #19357。它不是 PR #22836 的 `STQ1_0` 路径。
+- 当前结论：1.25bit / `STQ1_0` 需要 PR #22836；2bit / `q2_0c` 需要 PR #19357。若要一个 App runtime 同时支持两者，需要合并两个 PR 的 ggml / llama.cpp 改动。
 
 截至 2026-05-19 的追加验证：
 

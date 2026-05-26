@@ -17,6 +17,8 @@ models/*.safetensors
 models/*.apk
 models/AngelSlim/Hy-MT1.5-1.8B-1.25bit-GGUF/
 models/AngelSlim/Hy-MT1.5-1.8B-2bit-GGUF/
+models/AngelSlim/Hy-MT2-1.8B-1.25bit-GGUF/
+models/AngelSlim/Hy-MT2-1.8B-2bit-GGUF/
 
 # Third-party build outputs
 third_party/llama.cpp/build*/

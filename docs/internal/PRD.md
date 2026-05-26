@@ -97,6 +97,51 @@ HarmonyOS NEXT 按新平台端规划，不依赖 Android APK 兼容层。
 - 各端启动时自动扫描私有目录，已有模型则自动加载
 - 各端流式翻译效果和 UI 反馈一致
 
+## 支持的语言
+
+Hy-MT2 支持以下语言方向。产品语言选择器应以该清单为准，并保留语言代码用于 prompt、模型调用和排版方向判断。
+
+| Languages | Abbr. | Chinese Names |
+| --- | --- | --- |
+| Chinese | zh | 中文 |
+| English | en | 英语 |
+| French | fr | 法语 |
+| Portuguese | pt | 葡萄牙语 |
+| Spanish | es | 西班牙语 |
+| Japanese | ja | 日语 |
+| Turkish | tr | 土耳其语 |
+| Russian | ru | 俄语 |
+| Arabic | ar | 阿拉伯语 |
+| Korean | ko | 韩语 |
+| Thai | th | 泰语 |
+| Italian | it | 意大利语 |
+| German | de | 德语 |
+| Vietnamese | vi | 越南语 |
+| Malay | ms | 马来语 |
+| Indonesian | id | 印尼语 |
+| Filipino | tl | 菲律宾语 |
+| Hindi | hi | 印地语 |
+| Traditional Chinese | zh-Hant | 繁体中文 |
+| Polish | pl | 波兰语 |
+| Czech | cs | 捷克语 |
+| Dutch | nl | 荷兰语 |
+| Khmer | km | 高棉语 |
+| Burmese | my | 缅甸语 |
+| Persian | fa | 波斯语 |
+| Gujarati | gu | 古吉拉特语 |
+| Urdu | ur | 乌尔都语 |
+| Telugu | te | 泰卢固语 |
+| Marathi | mr | 马拉地语 |
+| Hebrew | he | 希伯来语 |
+| Bengali | bn | 孟加拉语 |
+| Tamil | ta | 泰米尔语 |
+| Ukrainian | uk | 乌克兰语 |
+| Tibetan | bo | 藏语 |
+| Kazakh | kk | 哈萨克语 |
+| Mongolian | mn | 蒙古语 |
+| Uyghur | ug | 维吾尔语 |
+| Cantonese | yue | 粤语 |
+
 ## 非目标
 
 - 不手填模型路径
@@ -114,6 +159,8 @@ HarmonyOS NEXT 按新平台端规划，不依赖 Android APK 兼容层。
 - HarmonyOS NEXT 推理路线：Flutter on OHOS（首选）或 ArkTS/ArkUI + NAPI（备选）+ shared native `translator_engine`
 - 默认模型：`Hy-MT1.5-1.8B-STQ1_0.gguf`
 - `llama.cpp` 必须保持 PR #22836 STQ1_0 兼容
+- Hy-MT2 1.25bit 与 2bit 依赖不同 `llama.cpp` 兼容路径：1.25bit / `STQ1_0` 需要 PR #22836；2bit / `q2_0c` 需要 PR #19357。不能把其中一个 PR runtime 当成另一个量化格式的替代实现。
+- 若产品要同时支持 Hy-MT2 1.25bit 和 2bit，需要合并 PR #22836 与 PR #19357 的 ggml / llama.cpp 改动，并重新完成 macOS、Android 的加载与最小翻译验证。
 - 原生引擎复用 `llama.cpp/common` chat template / tokenize / sampler
 - Android 仅 `arm64-v8a`
 - HarmonyOS NEXT 仅 ARM64 / AArch64，需用 OHOS Native SDK 重新编译 native 依赖
